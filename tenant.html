@@ -9,6 +9,16 @@
   <title>Dan's Rentals — Check Availability</title>
   <link rel="icon"
     href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏢</text></svg>">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    window.SUPABASE_URL = "https://jmpftxayrlnnaiajwshe.supabase.co"; 
+    window.SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImptcGZ0eGF5cmxubmFpYWp3c2hlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxODYxMDcsImV4cCI6MjA5Mzc2MjEwN30.9LxsA1GOAx9HkUqAQRMbHZKyOvefnzfg_RpMv4kjx4I";
+    
+    // Initialize immediately
+    if (window.supabase) {
+      window._supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+    }
+  </script>
   <link rel="stylesheet" href="./styles.css">
 </head>
 
@@ -80,8 +90,6 @@
 
   <!-- ===== SCRIPTS ===== -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script> window.SUPABASE_URL = "https://jmpftxayrlnnaiajwshe.supabase.co/rest/v1/"; window.SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImptcGZ0eGF5cmxubmFpYWp3c2hlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxODYxMDcsImV4cCI6MjA5Mzc2MjEwN30.9LxsA1GOAx9HkUqAQRMbHZKyOvefnzfg_RpMv4kjx4I"; </script>
 
   <script src="./rooms.js"></script>
   <script src="./tenant.js"></script>
