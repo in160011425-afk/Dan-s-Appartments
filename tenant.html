@@ -10,6 +10,11 @@
   <link rel="icon"
     href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏢</text></svg>">
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    window.SUPABASE_URL = 'SUPABASE_URL_HERE';
+    window.SUPABASE_ANON_KEY = 'SUPABASE_ANON_KEY_HERE';
+  </script>
   <link rel="stylesheet" href="styles.css">
 </head>
 
@@ -21,23 +26,30 @@
       class="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center text-3xl mx-auto mb-4 shadow-lg">
       🏢</div>
     <h1 class="text-2xl sm:text-3xl font-bold mb-2">Dan's Rentals</h1>
-    <p class="text-sm sm:text-base opacity-80 max-w-xs mx-auto">Check room availability instantly — no signup needed.
+    <p class="text-sm sm:text-base opacity-80 max-w-xs mx-auto">Check room availability instantly — secure tenant access.
     </p>
   </div>
 
   <main class="max-w-lg mx-auto px-4 -mt-4 relative z-10">
 
     <!-- ===== SEARCH ===== -->
-    <section class="bg-white rounded-2xl shadow-lg p-5 mb-6 border border-gray-100 fade-in">
-      <label for="searchInput" class="text-sm font-semibold text-gray-700 mb-2 block">Search Room</label>
-      <div class="flex gap-2">
-        <input type="text" id="searchInput" placeholder='Enter Room Number (e.g. 1)'
-          class="form-input text-base flex-1" autocomplete="off" autofocus>
-        <button onclick="searchRoom()" id="searchBtn" class="btn-action btn-primary px-5 shrink-0">
+    <section class="bg-white rounded-2xl shadow-lg p-6 mb-6 border border-gray-100 fade-in">
+      <div class="space-y-4">
+        <div>
+          <label for="searchInput" class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block ml-1">Room Number</label>
+          <input type="text" id="searchInput" placeholder='e.g. 1'
+            class="form-input text-base w-full px-5 py-4 rounded-2xl bg-gray-50 border-none focus:ring-2 focus:ring-teal-500" autocomplete="off" autofocus>
+        </div>
+        <div>
+          <label for="passwordInput" class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block ml-1">Room Password</label>
+          <input type="password" id="passwordInput" placeholder='Enter password'
+            class="form-input text-base w-full px-5 py-4 rounded-2xl bg-gray-50 border-none focus:ring-2 focus:ring-teal-500" autocomplete="off">
+        </div>
+        <button onclick="searchRoom()" id="searchBtn" class="w-full py-4 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-2xl shadow-lg shadow-teal-100 transition-all transform active:scale-95 flex items-center justify-center gap-2">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
-          <span class="hidden sm:inline">Check Status</span>
+          Check Status
         </button>
       </div>
     </section>
