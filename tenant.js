@@ -2,15 +2,14 @@
 // TENANT SEARCH PAGE — tenant.js
 // =============================================
 
-if (!window.SUPABASE_URL || window.SUPABASE_URL === "__SUPABASE_URL__") {
-  console.error("Secrets not injected! Check GitHub Actions and Repository Secrets.");
+const db = window._supabase;
+
+if (!db) {
+  console.error("Supabase client (db) not initialized! Check rooms.js and Secrets.");
 }
 
-const _supabase = (window.supabase && window.SUPABASE_URL && window.SUPABASE_URL !== "__SUPABASE_URL__") 
-  ? window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY) 
-  : null;
-
 document.addEventListener('DOMContentLoaded', async () => {
+  if (!db) return;
   await renderVacantRooms();
   
   // Allow Enter key to search
@@ -23,7 +22,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // ---- Search ----
-async function searchRoom() {
+window.searchRoom = async function() {
   const roomNumber = document.getElementById('searchInput').value.trim();
   const roomPassword = document.getElementById('passwordInput').value.trim();
   const section = document.getElementById('resultSection');
