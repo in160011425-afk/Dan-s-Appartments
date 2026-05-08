@@ -2,7 +2,13 @@
 // TENANT SEARCH PAGE — tenant.js
 // =============================================
 
-const _supabase = supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+if (!window.SUPABASE_URL || window.SUPABASE_URL === "__SUPABASE_URL__") {
+  console.error("Secrets not injected! Check GitHub Actions and Repository Secrets.");
+}
+
+const _supabase = (window.supabase && window.SUPABASE_URL && window.SUPABASE_URL !== "__SUPABASE_URL__") 
+  ? window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY) 
+  : null;
 
 document.addEventListener('DOMContentLoaded', async () => {
   await renderVacantRooms();
