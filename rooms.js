@@ -219,4 +219,3 @@ function timeAgo(dateStr) {
   if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
   return date.toLocaleDateString('en-KE', { day: 'numeric', month: 'short' });
 }
-
