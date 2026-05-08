@@ -4,21 +4,19 @@
 
 let currentFilter = 'all';
 
-const _supabase = (window.supabase && window.SUPABASE_URL && window.SUPABASE_URL !== "__SUPABASE_URL__") 
-  ? window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY) 
-  : null;
+const db = window._supabase;
 
-if (!_supabase) {
-  console.error("Secrets not injected or Supabase library missing!");
+if (!db) {
+  console.error("Supabase client (db) not initialized! Check rooms.js and Secrets.");
 }
 
 // ---- AUTH & INITIALIZATION ----
 document.addEventListener('DOMContentLoaded', async () => {
-  if (!_supabase) return;
+  if (!db) return;
 
 
   // Listen for Auth changes
-  _supabase.auth.onAuthStateChange((event, session) => {
+  db.auth.onAuthStateChange((event, session) => {
     console.log('Auth Event:', event);
     const loginModal = document.getElementById('loginModal');
     const main = document.querySelector('main');
@@ -40,7 +38,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   // Check initial session
-  const { data: { session }, error } = await _supabase.auth.getSession();
+  const { data: { session }, error } = await db.auth.getSession();
   if (error) console.error("Session check error:", error);
   
   const loginModal = document.getElementById('loginModal');
@@ -60,7 +58,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
-async function handleLogin() {
+window.handleLogin = async function() {
   const email = document.getElementById('loginEmail')?.value;
   const password = document.getElementById('loginPassword')?.value;
   const btn = document.getElementById('loginBtn');
@@ -74,7 +72,7 @@ async function handleLogin() {
     btn.disabled = true;
     btn.innerHTML = '<span class="flex items-center justify-center gap-2"><svg class="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Authenticating...</span>';
 
-    const { data, error } = await _supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await db.auth.signInWithPassword({ email, password });
 
     if (error) throw error;
     
@@ -86,26 +84,9 @@ async function handleLogin() {
     btn.disabled = false;
     btn.textContent = 'Access Dashboard';
   }
-}
+};
 
-function clearDashboard() {
-  const containers = ['statsSection', 'roomGrid', 'paymentStats', 'paymentTableBody', 'paymentCardList'];
-  containers.forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.innerHTML = '';
-  });
-}
-
-async function initializeApp() {
-  await renderStats();
-  await renderRooms();
-  await renderPaymentStats();
-  await renderPayments();
-  generateQR();
-}
-
-// ---- NAVIGATION ----
-function switchView(view) {
+window.switchView = function(view) {
   const roomsView = document.getElementById('roomsView');
   const paymentsView = document.getElementById('paymentsView');
   const navRooms = document.getElementById('nav-rooms');
@@ -131,182 +112,76 @@ function switchView(view) {
     renderPaymentStats();
     renderPayments();
   }
-}
+};
 
-// ---- PAYMENT DASHBOARD ----
-async function renderPaymentStats() {
-  const s = await getPaymentStats();
-  const el = document.getElementById('paymentStats');
-  if (!el) return;
-
-  const cards = [
-    { label: 'Collected (May)', val: formatRent(s.totalCollected), icon: '💰', color: 'teal' },
-    { label: 'Paid Tenants', val: s.paidTenants, icon: '✅', color: 'green' },
-    { label: 'Unpaid', val: s.unpaidTenants, icon: '❌', color: 'red' },
-    { label: 'Late', val: s.latePayments, icon: '⏳', color: 'amber' },
-    { label: 'Pending', val: s.pendingVerifications, icon: '🔍', color: 'purple' }
-  ];
-
-  el.innerHTML = cards.map((c, i) => `
-    <div class="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm fade-in" style="animation-delay:${i * 0.05}s">
-      <div class="flex items-center gap-2 mb-2">
-        <span class="text-lg">${c.icon}</span>
-        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">${c.label}</span>
-      </div>
-      <p class="text-xl font-bold text-gray-900">${c.val}</p>
-    </div>
-  `).join('');
-}
-
-async function renderPayments() {
-  const payments = await loadPayments();
-  const searchTerm = document.getElementById('paymentSearch')?.value.toLowerCase() || '';
-  const statusFilter = document.getElementById('statusFilter')?.value || 'all';
-
-  const filtered = payments.filter(p => {
-    const matchesSearch = p.tenantName.toLowerCase().includes(searchTerm) || p.unitNumber.includes(searchTerm);
-    const matchesStatus = statusFilter === 'all' || p.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  }).sort((a, b) => new Date(b.date) - new Date(a.date));
-
-  const tableBody = document.getElementById('paymentTableBody');
-  const cardList = document.getElementById('paymentCardList');
-
-  if (filtered.length === 0) {
-    const empty = `<div class="py-10 text-center text-gray-400 col-span-full">No payment records found.</div>`;
-    if (tableBody) tableBody.innerHTML = `<tr><td colspan="6">${empty}</td></tr>`;
-    if (cardList) cardList.innerHTML = empty;
-    return;
-  }
-
-  // Desktop Table
-  if (tableBody) {
-    tableBody.innerHTML = filtered.map(p => `
-      <tr class="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-        <td class="py-4 pl-2">
-          <div class="font-bold text-gray-900">${p.tenantName}</div>
-          <div class="text-xs text-gray-500">${formatRoomTitle(p.unitNumber)}</div>
-        </td>
-        <td class="py-4 font-bold text-teal-700">${formatRent(p.amount)}</td>
-        <td class="py-4 font-mono text-xs text-gray-600">${p.transactionCode}</td>
-        <td class="py-4 text-xs text-gray-500">${new Date(p.date).toLocaleDateString('en-KE', { day: 'numeric', month: 'short' })}</td>
-        <td class="py-4 text-center">
-          <span class="badge badge-${p.status}">${p.status}</span>
-        </td>
-        <td class="py-4 text-right pr-2">
-          <div class="flex justify-end gap-2">
-            <button onclick="viewReceipt('${p.receiptImage}')" class="p-2 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200" title="View Receipt">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-            </button>
-            ${p.status === 'pending' ? `
-              <button onclick="handlePaymentAction('${p.id}', 'verified')" class="p-2 rounded-xl bg-green-100 text-green-600 hover:bg-green-600 hover:text-white" title="Verify">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
-              </button>
-              <button onclick="handlePaymentAction('${p.id}', 'rejected')" class="p-2 rounded-xl bg-red-100 text-red-600 hover:bg-red-600 hover:text-white" title="Reject">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-              </button>
-            ` : ''}
-          </div>
-        </td>
-      </tr>
-    `).join('');
-  }
-
-  // Mobile Cards
-  if (cardList) {
-    cardList.innerHTML = filtered.map(p => `
-      <div class="bg-gray-50 rounded-2xl p-4 border border-gray-100">
-        <div class="flex justify-between items-start mb-3">
-          <div>
-            <div class="font-bold text-gray-900">${p.tenantName}</div>
-            <div class="text-xs text-gray-500">${formatRoomTitle(p.unitNumber)} • ${new Date(p.date).toLocaleDateString()}</div>
-          </div>
-          <span class="badge badge-${p.status}">${p.status}</span>
-        </div>
-        <div class="flex justify-between items-center">
-          <div class="text-sm font-bold text-teal-700">${formatRent(p.amount)} <span class="text-[10px] font-mono text-gray-400 ml-2">${p.transactionCode}</span></div>
-          <div class="flex gap-2">
-            <button onclick="viewReceipt('${p.receiptImage}')" class="btn-action bg-white border border-gray-200 text-gray-600 py-2 px-3 text-xs">Receipt</button>
-            ${p.status === 'pending' ? `
-              <button onclick="handlePaymentAction('${p.id}', 'verified')" class="btn-action bg-green-500 text-white py-2 px-3 text-xs">Verify</button>
-            ` : ''}
-          </div>
-        </div>
-      </div>
-    `).join('');
-  }
-}
-
-async function handlePaymentAction(id, status) {
+window.handlePaymentAction = async function(id, status) {
   const updated = await updatePaymentStatus(id, status);
   if (updated) {
     showToast(`Payment for ${updated.tenantName} ${status}`);
     renderPaymentStats();
     renderPayments();
   }
-}
+};
 
-// ---- ROOM MANAGEMENT ----
-async function renderStats() {
-  const s = await getRoomStats();
-  const el = document.getElementById('statsSection');
-  if (!el) return;
-  el.innerHTML = `
-    <div class="stat-card fade-in" style="animation-delay:.05s">
-      <div class="flex items-center gap-2 mb-2">
-        <div class="w-8 h-8 rounded-lg bg-teal-50 flex items-center justify-center text-teal-600 font-bold">∑</div>
-        <span class="text-[10px] font-bold text-gray-400 uppercase">Total</span>
-      </div>
-      <p class="text-2xl font-bold text-gray-900">${s.total}</p>
-    </div>
-    <div class="stat-card fade-in" style="animation-delay:.1s">
-      <div class="flex items-center gap-2 mb-2">
-        <div class="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center text-green-600">✓</div>
-        <span class="text-[10px] font-bold text-gray-400 uppercase">Vacant</span>
-      </div>
-      <p class="text-2xl font-bold text-green-600">${s.vacant}</p>
-    </div>
-    <div class="stat-card fade-in" style="animation-delay:.15s">
-      <div class="flex items-center gap-2 mb-2">
-        <div class="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center text-red-500">✕</div>
-        <span class="text-[10px] font-bold text-gray-400 uppercase">Occupied</span>
-      </div>
-      <p class="text-2xl font-bold text-red-500">${s.occupied}</p>
-    </div>
-    <div class="stat-card fade-in" style="animation-delay:.2s">
-      <div class="flex items-center gap-2 mb-2">
-        <div class="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center text-amber-600">⏳</div>
-        <span class="text-[10px] font-bold text-gray-400 uppercase">Reserved</span>
-      </div>
-      <p class="text-2xl font-bold text-amber-600">${s.reserved}</p>
-    </div>
-  `;
-}
-
-async function renderRooms() {
-  const rooms = await loadRooms();
-  const filtered = currentFilter === 'all' ? rooms : rooms.filter(r => r.status === currentFilter);
-  const grid = document.getElementById('roomGrid');
-  if (!grid) return;
-
-  if (filtered.length === 0) {
-    grid.innerHTML = `<div class="empty-state col-span-full text-center py-10 text-gray-400">No rooms found for this filter.</div>`;
-    return;
+window.updateRoomField = async function(roomNumber, field, value) {
+  const updates = {};
+  updates[field] = value;
+  const res = await updateRoom(roomNumber, updates);
+  if (res) {
+    showToast(`Updated ${field}`);
+    await renderStats();
+    await renderRooms();
+    // Refresh modal
+    openModal(roomNumber);
   }
+};
 
-  grid.innerHTML = filtered.map((room, i) => `
-    <div class="room-card bg-white p-5 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md transition-all fade-in" style="animation-delay:${i * 0.05}s" onclick="openModal('${room.roomNumber}')">
-      <div class="flex items-center justify-between mb-3">
-        <h3 class="font-bold text-lg text-gray-900">${formatRoomTitle(room.roomNumber)}</h3>
-        <span class="badge badge-${room.status}">${room.status}</span>
-      </div>
-      <p class="text-sm text-gray-500 mb-2">${room.type}</p>
-      <p class="text-xl font-bold text-teal-700">${formatRent(room.rent)}<span class="text-[10px] font-normal text-gray-400 ml-1">/mo</span></p>
-    </div>
-  `).join('');
-}
+window.saveRoomDetails = async function(roomNumber) {
+  const password = document.getElementById('roomPasswordInput').value;
+  const rent = document.getElementById('roomRentInput').value;
+  const type = document.getElementById('roomTypeInput').value;
 
-async function openModal(roomNumber) {
+  const updates = {
+    roomPassword: password,
+    rent: parseInt(rent),
+    type: type
+  };
+
+  const res = await updateRoom(roomNumber, updates);
+  if (res) {
+    showToast('Room details updated');
+    closeModal();
+    await renderStats();
+    await renderRooms();
+  }
+};
+
+window.setFilter = function(filter) {
+  currentFilter = filter;
+  const buttons = document.querySelectorAll('.filter-btn');
+  buttons.forEach(btn => {
+    if (btn.dataset.filter === filter) btn.classList.add('active');
+    else btn.classList.remove('active');
+  });
+  renderRooms();
+};
+
+window.viewReceipt = function(url) {
+  const modal = document.getElementById('receiptModal');
+  const img = document.getElementById('receiptPreview');
+  img.src = url;
+  modal.classList.add('active');
+};
+
+window.closeReceiptModal = function() {
+  document.getElementById('receiptModal').classList.remove('active');
+};
+
+window.closeModal = function() {
+  document.getElementById('roomModal').classList.remove('active');
+};
+
+window.openModal = async function(roomNumber) {
   const room = await findRoom(roomNumber);
   if (!room) return;
 
@@ -358,152 +233,9 @@ async function openModal(roomNumber) {
     </div>
   `;
   modal.classList.add('active');
-}
+};
 
-async function updateRoomField(roomNumber, field, value) {
-  const updates = {};
-  updates[field] = value;
-  const res = await updateRoom(roomNumber, updates);
-  if (res) {
-    showToast(`Updated ${field}`);
-    await renderStats();
-    await renderRooms();
-    // Refresh modal
-    openModal(roomNumber);
-  }
-}
-
-async function saveRoomDetails(roomNumber) {
-  const password = document.getElementById('roomPasswordInput').value;
-  const rent = document.getElementById('roomRentInput').value;
-  const type = document.getElementById('roomTypeInput').value;
-
-  const updates = {
-    roomPassword: password,
-    rent: parseInt(rent),
-    type: type
-  };
-
-  const res = await updateRoom(roomNumber, updates);
-  if (res) {
-    showToast('Room details updated');
-    closeModal();
-    await renderStats();
-    await renderRooms();
-  }
-}
-
-function closeModal() {
-  document.getElementById('roomModal').classList.remove('active');
-}
-
-// ---- UI UTILS ----
-function setFilter(filter) {
-  currentFilter = filter;
-  const buttons = document.querySelectorAll('.filter-btn');
-  buttons.forEach(btn => {
-    if (btn.dataset.filter === filter) btn.classList.add('active');
-    else btn.classList.remove('active');
-  });
-  renderRooms();
-}
-
-function filterPayments() {
-  renderPayments();
-}
-
-function viewReceipt(url) {
-  const modal = document.getElementById('receiptModal');
-  const img = document.getElementById('receiptPreview');
-  img.src = url;
-  modal.classList.add('active');
-}
-
-function closeReceiptModal() {
-  document.getElementById('receiptModal').classList.remove('active');
-}
-
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  if (!t) return;
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2500);
-}
-
-// ---- QR CODE ----
-function generateQR() {
-  const container = document.getElementById('qrCode');
-  if (!container) return;
-  
-  if (typeof QRCode === 'undefined') {
-    console.error('QRCode library not loaded');
-    container.innerHTML = '<p class="text-red-500 text-xs">QR Library Error</p>';
-    return;
-  }
-
-  container.innerHTML = '';
-  
-  // Robust URL construction
-  const tenantUrl = window.location.origin + '/tenant.html';
-  
-  console.log('Generating QR for:', tenantUrl);
-
-  try {
-    new QRCode(container, {
-      text: tenantUrl,
-      width: 160,
-      height: 160,
-      colorDark: '#0d9488',
-      colorLight: '#ffffff',
-      correctLevel: QRCode.CorrectLevel.H
-    });
-  } catch (err) {
-    console.error('QR Generation Failed:', err);
-  }
-}
-
-async function downloadQR() {
-  const container = document.getElementById('qrCode');
-  const img = container.querySelector('img');
-  const canvas = container.querySelector('canvas');
-  
-  if (!img && !canvas) {
-    showToast('❌ No QR code found');
-    return;
-  }
-
-  try {
-    let dataUrl;
-    if (canvas) {
-      dataUrl = canvas.toDataURL("image/png");
-    } else {
-      const response = await fetch(img.src);
-      const blob = await response.blob();
-      dataUrl = URL.createObjectURL(blob);
-    }
-
-    const a = document.createElement('a');
-    a.href = dataUrl;
-    a.download = `dan-rentals-qr-${new Date().getTime()}.png`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    if (!canvas) URL.revokeObjectURL(dataUrl);
-    showToast('📥 QR Code downloaded');
-  } catch (err) {
-    console.error('Download failed:', err);
-    showToast('❌ Download failed');
-  }
-}
-
-function copyTenantLink() {
-  const base = window.location.href.replace(/\/[^\/]*$/, '/');
-  const tenantUrl = base + 'tenant.html';
-  navigator.clipboard.writeText(tenantUrl).then(() => showToast('🔗 Link copied'));
-}
-
-async function openAddRoomModal() {
+window.openAddRoomModal = async function() {
   const modal = document.getElementById('roomModal');
   const body = document.getElementById('modalBody');
 
@@ -546,9 +278,9 @@ async function openAddRoomModal() {
     </div>
   `;
   modal.classList.add('active');
-}
+};
 
-async function createNewRoom() {
+window.createNewRoom = async function() {
   const roomNumber = document.getElementById('newRoomNumber')?.value;
   const roomPassword = document.getElementById('newRoomPassword')?.value;
   const rent = document.getElementById('newRoomRent')?.value;
@@ -559,7 +291,7 @@ async function createNewRoom() {
     return;
   }
 
-  if (!window._supabase) {
+  if (!db) {
     showToast('❌ System Configuration Error: Missing API Credentials.');
     return;
   }
@@ -576,7 +308,7 @@ async function createNewRoom() {
 
     console.log('Attempting to insert room:', roomPayload);
 
-    const { data, error } = await _supabase
+    const { data, error } = await db
       .from('rooms')
       .insert([roomPayload])
       .select();
@@ -597,15 +329,15 @@ async function createNewRoom() {
     console.error('Critical Error in createNewRoom:', error);
     showToast('❌ Database write failed');
   }
-}
+};
 
-async function downloadRoomReport() {
-  if (!window._supabase) {
+window.downloadRoomReport = async function() {
+  if (!db) {
     showToast('❌ System Configuration Error: Missing API Credentials.');
     return;
   }
 
-  const { data, error } = await _supabase.from('rooms').select('*').order('room_number');
+  const { data, error } = await db.from('rooms').select('*').order('room_number');
   if (error) {
     alert('Failed to fetch rooms for report: ' + error.message);
     return;
@@ -632,9 +364,9 @@ async function downloadRoomReport() {
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
   showToast('📥 Rooms inventory downloaded');
-}
+};
 
-async function downloadPaymentReport() {
+window.downloadPaymentReport = async function() {
   const payments = await loadPayments();
   const headers = ['Tenant Name', 'Unit Number', 'Amount', 'Transaction Code', 'Status', 'Date', 'Month'];
   const rows = payments.map(p => [
@@ -659,24 +391,44 @@ async function downloadPaymentReport() {
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
   showToast('📥 Report downloaded');
-}
+};
 
-// ---- GLOBAL EXPOSURE ----
-window.handleLogin = handleLogin;
-window.setFilter = setFilter;
-window.renderPayments = renderPayments;
-window.filterPayments = filterPayments;
-window.switchView = switchView;
-window.handlePaymentAction = handlePaymentAction;
-window.viewReceipt = viewReceipt;
-window.closeReceiptModal = closeReceiptModal;
-window.openModal = openModal;
-window.closeModal = closeModal;
-window.updateRoomField = updateRoomField;
-window.saveRoomDetails = saveRoomDetails;
-window.downloadQR = downloadQR;
-window.downloadPaymentReport = downloadPaymentReport;
-window.downloadRoomReport = downloadRoomReport;
-window.copyTenantLink = copyTenantLink;
-window.openAddRoomModal = openAddRoomModal;
-window.createNewRoom = createNewRoom;
+window.downloadQR = async function() {
+  const container = document.getElementById('qrCode');
+  const img = container.querySelector('img');
+  const canvas = container.querySelector('canvas');
+  
+  if (!img && !canvas) {
+    showToast('❌ No QR code found');
+    return;
+  }
+
+  try {
+    let dataUrl;
+    if (canvas) {
+      dataUrl = canvas.toDataURL("image/png");
+    } else {
+      const response = await fetch(img.src);
+      const blob = await response.blob();
+      dataUrl = URL.createObjectURL(blob);
+    }
+
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = `dan-rentals-qr-${new Date().getTime()}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    if (!canvas) URL.revokeObjectURL(dataUrl);
+    showToast('📥 QR Code downloaded');
+  } catch (err) {
+    console.error('Download failed:', err);
+    showToast('❌ Download failed');
+  }
+};
+
+window.copyTenantLink = function() {
+  const base = window.location.href.replace(/\/[^\/]*$/, '/');
+  const tenantUrl = base + 'tenant.html';
+  navigator.clipboard.writeText(tenantUrl).then(() => showToast('🔗 Link copied'));
+};
