@@ -8,7 +8,7 @@ const _supabase = supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANO
 window._supabase = _supabase; 
 
 
-const LANDLORD_PHONE = '254712345678';
+const LANDLORD_PHONE = '254717056096';
 
 // ---- AUTH HELPER ----
 async function getCurrentUser() {
