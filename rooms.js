@@ -4,11 +4,19 @@
 
 // These will be initialized in the HTML or here if hardcoded
 // ---- SECURE INITIALIZATION ----
-const _supabase = supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
-window._supabase = _supabase; 
+if (!window.SUPABASE_URL || window.SUPABASE_URL === "__SUPABASE_URL__") {
+  console.error("Secrets not injected! Check GitHub Actions and Repository Secrets.");
+}
+
+// Initialize and share the client globally
+window._supabase = (window.supabase && window.SUPABASE_URL && window.SUPABASE_URL !== "__SUPABASE_URL__") 
+  ? window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY) 
+  : null;
+
+const _supabase = window._supabase;
 
 
-const LANDLORD_PHONE = '254717056096';
+const LANDLORD_PHONE = '254712345678';
 
 // ---- AUTH HELPER ----
 async function getCurrentUser() {
