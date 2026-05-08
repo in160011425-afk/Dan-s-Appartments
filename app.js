@@ -148,12 +148,10 @@ window.updateRoomField = async function(roomNumber, field, value) {
 window.saveRoomDetails = async function(roomNumber) {
   const password = document.getElementById('roomPasswordInput').value;
   const rent = document.getElementById('roomRentInput').value;
-  const type = document.getElementById('roomTypeInput').value;
 
   const updates = {
     roomPassword: password,
-    rent: parseInt(rent),
-    type: type
+    rent: parseInt(rent)
   };
 
   const res = await updateRoom(roomNumber, updates);
@@ -224,15 +222,9 @@ window.openModal = async function(roomNumber) {
           <input type="text" id="roomPasswordInput" value="${room.roomPassword || ''}" placeholder="Enter password..." class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-teal-500 text-sm">
         </div>
 
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Monthly Rent</label>
-            <input type="number" id="roomRentInput" value="${room.rent}" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-teal-500 text-sm">
-          </div>
-          <div>
-            <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Room Type</label>
-            <input type="text" id="roomTypeInput" value="${room.type}" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-teal-500 text-sm">
-          </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Monthly Rent</label>
+          <input type="number" id="roomRentInput" value="${room.rent}" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-teal-500 text-sm">
         </div>
 
         <button onclick="saveRoomDetails('${room.roomNumber}')" class="w-full py-4 bg-teal-600 text-white font-bold rounded-2xl shadow-lg shadow-teal-100 mt-4 transition-all active:scale-95">
@@ -269,15 +261,9 @@ window.openAddRoomModal = async function() {
           <input type="text" id="newRoomPassword" placeholder="Set access password..." class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-teal-500 text-sm">
         </div>
 
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Monthly Rent</label>
-            <input type="number" id="newRoomRent" placeholder="8500" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-teal-500 text-sm">
-          </div>
-          <div>
-            <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Room Type</label>
-            <input type="text" id="newRoomType" placeholder="Bedsitter" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-teal-500 text-sm">
-          </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Monthly Rent</label>
+          <input type="number" id="newRoomRent" placeholder="8500" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-teal-500 text-sm">
         </div>
 
         <button onclick="createNewRoom()" class="w-full py-4 bg-teal-600 text-white font-bold rounded-2xl shadow-lg shadow-teal-100 mt-4 transition-all active:scale-95">
@@ -309,10 +295,8 @@ window.createNewRoom = async function() {
     const roomPayload = {
       room_number: roomNumber,
       room_password: roomPassword,
-      rent: parseFloat(rent),
-      type: type,
-      status: 'vacant',
-      updated_at: new Date().toISOString()
+      monthly_rent: parseFloat(rent),
+      status: 'vacant'
     };
 
     console.log('Attempting to insert room:', roomPayload);
@@ -494,7 +478,7 @@ window.renderRooms = async function() {
       <div class="flex justify-between items-start mb-4">
         <div>
           <h3 class="text-lg font-black text-gray-900">${formatRoomTitle(r.roomNumber)}</h3>
-          <p class="text-xs font-bold text-gray-400 uppercase">${r.type}</p>
+          <p class="text-xs font-bold text-gray-400 uppercase">Room Details</p>
         </div>
         <span class="badge badge-${r.status}">${r.status}</span>
       </div>
