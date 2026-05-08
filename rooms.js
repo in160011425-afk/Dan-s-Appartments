@@ -3,12 +3,21 @@
 // =============================================
 
 // These will be initialized in the HTML or here if hardcoded
-const SUPABASE_URL = window.SUPABASE_URL || '';
-const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || '';
+// ---- SECURE INITIALIZATION ----
+const SUPABASE_URL = window.ENV?.SUPABASE_URL || '';
+const SUPABASE_ANON_KEY = window.ENV?.SUPABASE_ANON_KEY || '';
 
 let supabase;
-if (typeof supabasejs !== 'undefined') {
-  supabase = supabasejs.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_URL.includes('__') || SUPABASE_ANON_KEY.includes('__')) {
+  console.error("System Configuration Error: Missing API Credentials.");
+  alert("System Configuration Error: Missing API Credentials.");
+} else {
+  try {
+    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  } catch (e) {
+    console.error("Supabase failed to initialize. Check your URL and Key.", e);
+  }
 }
 
 const LANDLORD_PHONE = '254712345678';
