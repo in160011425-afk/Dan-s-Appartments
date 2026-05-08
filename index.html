@@ -6,6 +6,16 @@
   <meta name="description" content="Dan's Rentals — Landlord Dashboard. Manage room vacancies, update statuses, and share availability with tenants.">
   <title>Dan's Rentals — Dashboard</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏢</text></svg>">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    window.SUPABASE_URL = "https://jmpftxayrlnnaiajwshe.supabase.co/rest/v1/"; 
+    window.SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImptcGZ0eGF5cmxubmFpYWp3c2hlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxODYxMDcsImV4cCI6MjA5Mzc2MjEwN30.9LxsA1GOAx9HkUqAQRMbHZKyOvefnzfg_RpMv4kjx4I";
+    
+    // Initialize immediately
+    if (window.supabase) {
+      window._supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+    }
+  </script>
   <link rel="stylesheet" href="./styles.css">
   <link rel="manifest" href="./manifest.json">
 </head>
@@ -50,6 +60,13 @@
       <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
       <span class="text-[10px] lg:text-sm font-bold uppercase tracking-wider">Rent Payments</span>
     </button>
+
+    <div class="lg:mt-auto pt-2 lg:pt-6 border-t border-gray-100 lg:border-none">
+      <button onclick="handleLogout()" class="w-full flex flex-col lg:flex-row items-center gap-1 lg:gap-3 p-3 rounded-2xl text-red-500 hover:bg-red-50 transition-all">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+        <span class="text-[10px] lg:text-sm font-bold uppercase tracking-wider">Sign Out</span>
+      </button>
+    </div>
   </nav>
 
   <main class="lg:ml-64 pb-20 lg:pb-10 min-h-screen transition-all duration-500">
@@ -166,8 +183,6 @@
   <!-- ===== SCRIPTS ===== -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script> window.SUPABASE_URL = "https://jmpftxayrlnnaiajwshe.supabase.co/rest/v1/"; window.SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImptcGZ0eGF5cmxubmFpYWp3c2hlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxODYxMDcsImV4cCI6MjA5Mzc2MjEwN30.9LxsA1GOAx9HkUqAQRMbHZKyOvefnzfg_RpMv4kjx4I"; </script>
   
   <script src="./rooms.js"></script>
   <script src="./app.js"></script>
