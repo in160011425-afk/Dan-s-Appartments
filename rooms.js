@@ -177,6 +177,106 @@ async function getPaymentStats() {
   };
 }
 
+// ---- TENANTS ----
+async function loadTenants() {
+  const { data, error } = await _supabase
+    .from('tenants')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error loading tenants:', error);
+    return [];
+  }
+
+  return data;
+}
+
+async function registerTenant(tenantData) {
+  const { data, error } = await _supabase
+    .from('tenants')
+    .insert([tenantData])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error registering tenant:', error);
+    return null;
+  }
+  return data;
+}
+
+// ---- NOTICES ----
+async function loadNotices() {
+  const { data, error } = await _supabase
+    .from('notices')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error loading notices:', error);
+    return [];
+  }
+  return data;
+}
+
+async function postNotice(noticeData) {
+  const { data, error } = await _supabase
+    .from('notices')
+    .insert([noticeData])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error posting notice:', error);
+    return null;
+  }
+  return data;
+}
+
+// ---- MAINTENANCE ----
+async function loadMaintenanceRequests() {
+  const { data, error } = await _supabase
+    .from('maintenance_requests')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error loading maintenance:', error);
+    return [];
+  }
+  return data;
+}
+
+async function createMaintenanceRequest(reqData) {
+  const { data, error } = await _supabase
+    .from('maintenance_requests')
+    .insert([reqData])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error creating maintenance request:', error);
+    return null;
+  }
+  return data;
+}
+
+async function updateMaintenanceStatus(id, status) {
+  const { data, error } = await _supabase
+    .from('maintenance_requests')
+    .update({ status })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error updating maintenance status:', error);
+    return null;
+  }
+  return data;
+}
+
 // ---- UTILS ----
 function formatRoomTitle(roomNumber) {
   const num = roomNumber.replace(/\D/g, '');
