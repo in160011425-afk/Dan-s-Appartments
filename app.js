@@ -6,31 +6,44 @@ let currentFilter = 'all';
 
 // ---- AUTH & INITIALIZATION ----
 document.addEventListener('DOMContentLoaded', async () => {
+  // Wait for Supabase to be ready from rooms.js
+  if (!window.supabase) {
+    console.error("Supabase client not found. Ensure rooms.js is loaded.");
+    return;
+  }
+
   // Listen for Auth changes
   supabase.auth.onAuthStateChange((event, session) => {
+    console.log('Auth Event:', event);
     const loginModal = document.getElementById('loginModal');
     if (session) {
       loginModal.classList.add('hidden');
-      loginModal.classList.remove('!flex');
+      loginModal.classList.remove('active', '!flex');
       initializeApp();
     } else {
       loginModal.classList.remove('hidden');
-      loginModal.classList.add('!flex');
+      loginModal.classList.add('active', '!flex');
+      // Clear data on logout
+      clearDashboard();
     }
   });
 
   // Check initial session
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { session }, error } = await supabase.auth.getSession();
+  if (error) console.error("Session check error:", error);
+  
   if (!session) {
-    document.getElementById('loginModal').classList.add('!flex');
+    const modal = document.getElementById('loginModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('active', '!flex');
   } else {
     initializeApp();
   }
 });
 
 async function handleLogin() {
-  const email = document.getElementById('loginEmail').value;
-  const password = document.getElementById('loginPassword').value;
+  const email = document.getElementById('loginEmail')?.value;
+  const password = document.getElementById('loginPassword')?.value;
   const btn = document.getElementById('loginBtn');
 
   if (!email || !password) {
@@ -38,16 +51,30 @@ async function handleLogin() {
     return;
   }
 
-  btn.disabled = true;
-  btn.textContent = 'Authenticating...';
+  try {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="flex items-center justify-center gap-2"><svg class="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Authenticating...</span>';
 
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
-  if (error) {
-    showToast('❌ ' + error.message);
+    if (error) throw error;
+    
+    showToast('✅ Welcome back!');
+    // Modal will be hidden by onAuthStateChange
+  } catch (error) {
+    console.error('Login Error:', error);
+    showToast('❌ ' + (error.message || 'Login failed'));
     btn.disabled = false;
     btn.textContent = 'Access Dashboard';
   }
+}
+
+function clearDashboard() {
+  const containers = ['statsSection', 'roomGrid', 'paymentStats', 'paymentTableBody', 'paymentCardList'];
+  containers.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = '';
+  });
 }
 
 async function initializeApp() {
@@ -74,6 +101,7 @@ function switchView(view) {
     navPayments.classList.add('text-gray-400');
     renderStats();
     renderRooms();
+    generateQR();
   } else {
     roomsView.classList.add('hidden');
     paymentsView.classList.remove('hidden');
@@ -388,17 +416,36 @@ function showToast(msg) {
 function generateQR() {
   const container = document.getElementById('qrCode');
   if (!container) return;
+  
+  if (typeof QRCode === 'undefined') {
+    console.error('QRCode library not loaded');
+    container.innerHTML = '<p class="text-red-500 text-xs">QR Library Error</p>';
+    return;
+  }
+
   container.innerHTML = '';
-  const base = window.location.href.replace(/\/[^\/]*$/, '/');
+  
+  // Robust URL construction
+  let base = window.location.origin + window.location.pathname;
+  if (!base.endsWith('/')) {
+    base = base.substring(0, base.lastIndexOf('/') + 1);
+  }
   const tenantUrl = base + 'tenant.html';
-  new QRCode(container, {
-    text: tenantUrl,
-    width: 140,
-    height: 140,
-    colorDark: '#0d9488',
-    colorLight: '#ffffff',
-    correctLevel: QRCode.CorrectLevel.H
-  });
+  
+  console.log('Generating QR for:', tenantUrl);
+
+  try {
+    new QRCode(container, {
+      text: tenantUrl,
+      width: 160,
+      height: 160,
+      colorDark: '#0d9488',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.H
+    });
+  } catch (err) {
+    console.error('QR Generation Failed:', err);
+  }
 }
 
 function copyTenantLink() {
@@ -453,35 +500,70 @@ async function openAddRoomModal() {
 }
 
 async function createNewRoom() {
-  const roomNumber = document.getElementById('newRoomNumber').value;
-  const roomPassword = document.getElementById('newRoomPassword').value;
-  const rent = document.getElementById('newRoomRent').value;
-  const type = document.getElementById('newRoomType').value;
+  const roomNumber = document.getElementById('newRoomNumber')?.value;
+  const roomPassword = document.getElementById('newRoomPassword')?.value;
+  const rent = document.getElementById('newRoomRent')?.value;
+  const type = document.getElementById('newRoomType')?.value;
 
   if (!roomNumber || !rent) {
     showToast('⚠️ Room number and rent are required');
     return;
   }
 
-  const { data, error } = await supabase
-    .from('rooms')
-    .insert([{
+  if (!supabase) {
+    showToast('❌ System Configuration Error: Missing API Credentials.');
+    return;
+  }
+
+  try {
+    // Step 1: Check for existing apartment context if missing
+    let apartmentId = null;
+    const { data: roomsData } = await supabase.from('rooms').select('apartment_id').limit(1);
+    if (roomsData && roomsData.length > 0) {
+      apartmentId = roomsData[0].apartment_id;
+    } else {
+      // Try to fetch from apartments table directly if rooms is empty
+      const { data: aptData } = await supabase.from('apartments').select('id').limit(1);
+      if (aptData && aptData.length > 0) apartmentId = aptData[0].id;
+    }
+
+    const roomPayload = {
       room_number: roomNumber,
       room_password: roomPassword,
       rent: parseInt(rent),
       type: type,
       status: 'vacant',
       updated_at: new Date().toISOString()
-    }])
-    .select();
+    };
 
-  if (error) {
-    showToast('❌ Error: ' + error.message);
-  } else {
+    if (apartmentId) {
+      roomPayload.apartment_id = apartmentId;
+    }
+
+    console.log('Creating room with payload:', roomPayload);
+
+    const { data, error } = await supabase
+      .from('rooms')
+      .insert([roomPayload])
+      .select();
+
+    if (error) {
+      console.error('Supabase Write Error:', error);
+      // Specific check for RLS or missing fields
+      if (error.code === '42P01') throw new Error('Table "rooms" not found.');
+      if (error.code === '23502') throw new Error(`Missing required field: ${error.details || 'Check apartment_id'}`);
+      throw error;
+    }
+
     showToast('✅ New room added successfully');
+    
+    // Refresh UI
     closeModal();
-    await renderStats();
-    await renderRooms();
+    await initializeApp(); // Full refresh to ensure consistency
+    
+  } catch (error) {
+    console.error('Critical Error in createNewRoom:', error);
+    showToast('❌ ' + (error.message || 'Unknown database error'));
   }
 }
 
