@@ -23,38 +23,39 @@ document.addEventListener('DOMContentLoaded', async () => {
     const nav = document.querySelector('nav');
     
     if (session) {
-      loginModal.classList.add('hidden');
-      loginModal.classList.remove('active', '!flex');
+      if (loginModal) {
+        loginModal.classList.add('hidden');
+        loginModal.classList.remove('active', '!flex');
+      }
       if (main) main.classList.remove('hidden');
       if (nav) nav.classList.remove('hidden');
       initializeApp();
     } else {
-      loginModal.classList.remove('hidden');
-      loginModal.classList.add('active', '!flex');
+      if (loginModal) {
+        loginModal.classList.remove('hidden');
+        loginModal.classList.add('active', '!flex');
+      }
       if (main) main.classList.add('hidden');
       if (nav) nav.classList.add('hidden');
       clearDashboard();
     }
   });
 
-  // Check initial session
+  // Check initial session (Persistence)
   const { data: { session }, error } = await db.auth.getSession();
   if (error) console.error("Session check error:", error);
   
-  const loginModal = document.getElementById('loginModal');
-  const main = document.querySelector('main');
-  const nav = document.querySelector('nav');
-
-  if (!session) {
-    loginModal.classList.remove('hidden');
-    loginModal.classList.add('active', '!flex');
-    if (main) main.classList.add('hidden');
-    if (nav) nav.classList.add('hidden');
-  } else {
-    loginModal.classList.add('hidden');
-    if (main) main.classList.remove('hidden');
-    if (nav) nav.classList.remove('hidden');
+  if (session) {
+    document.getElementById('loginModal')?.classList.add('hidden');
+    document.querySelector('main')?.classList.remove('hidden');
+    document.querySelector('nav')?.classList.remove('hidden');
     initializeApp();
+  } else {
+    const modal = document.getElementById('loginModal');
+    if (modal) {
+      modal.classList.remove('hidden');
+      modal.classList.add('active', '!flex');
+    }
   }
 });
 
@@ -64,25 +65,33 @@ window.handleLogin = async function() {
   const btn = document.getElementById('loginBtn');
 
   if (!email || !password) {
-    showToast('⚠️ Email and password required');
+    alert('⚠️ Email and password required');
     return;
   }
 
   try {
     btn.disabled = true;
-    btn.innerHTML = '<span class="flex items-center justify-center gap-2"><svg class="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Signing in...</span>';
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<span class="flex items-center justify-center gap-2"><svg class="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Authenticating...</span>';
 
     const { data, error } = await db.auth.signInWithPassword({ email, password });
 
     if (error) throw error;
     
-    showToast('✅ Welcome back!');
-    // Modal will be hidden by onAuthStateChange
+    // Success: Reload to initialize dashboard with new session
+    window.location.reload();
   } catch (error) {
     console.error('Login Error:', error);
-    showToast('❌ ' + (error.message || 'Login failed'));
+    alert('❌ Login Failed: ' + (error.message || 'Check your credentials and try again.'));
     btn.disabled = false;
     btn.textContent = 'Access Dashboard';
+  }
+};
+
+window.handleLogout = async function() {
+  if (confirm('Are you sure you want to sign out?')) {
+    await db.auth.signOut();
+    window.location.reload();
   }
 };
 
@@ -203,7 +212,7 @@ window.openModal = async function(roomNumber) {
           <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Status</label>
           <div class="grid grid-cols-3 gap-2">
             ${['vacant', 'occupied', 'reserved'].map(s => `
-              <button onclick="updateRoomField('${room.roomNumber}', 'status', '${s}')" class="py-3 px-2 rounded-xl text-xs font-bold capitalize transition-all ${room.status === s ? 'bg-teal-600 text-white shadow-lg shadow-teal-100' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}">
+              <button onclick="updateRoomField('${room.roomNumber}', 'status', '${s}')" class="py-3 px-2 rounded-xl text-xs font-bold capitalize transition-all ${room.status === s ? 'bg-teal-600 text-white shadow-lg shadow-teal-100' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}">
                 ${s}
               </button>
             `).join('')}
@@ -319,6 +328,7 @@ window.createNewRoom = async function() {
       throw error;
     }
 
+    alert("Success!");
     showToast('✅ New room added successfully');
     
     // Refresh UI
@@ -433,158 +443,177 @@ window.copyTenantLink = function() {
   navigator.clipboard.writeText(tenantUrl).then(() => showToast('🔗 Link copied'));
 };
 
-// ---- RENDERING & UI ----
-async function initializeApp() {
+// ---- DASHBOARD RENDERING ----
+window.initializeApp = async function() {
   await renderStats();
   await renderRooms();
   generateQR();
-}
+};
 
-function clearDashboard() {
-  const statsContainer = document.getElementById('stats');
-  const roomsContainer = document.getElementById('roomsContainer');
-  if (statsContainer) statsContainer.innerHTML = '';
-  if (roomsContainer) roomsContainer.innerHTML = '';
-}
+window.clearDashboard = function() {
+  const roomGrid = document.getElementById('roomGrid');
+  const statsSection = document.getElementById('statsSection');
+  if (roomGrid) roomGrid.innerHTML = '';
+  if (statsSection) statsSection.innerHTML = '';
+};
 
-async function renderStats() {
+window.renderStats = async function() {
   const stats = await getRoomStats();
-  const container = document.getElementById('stats');
-  
-  container.innerHTML = `
-    <div class="grid grid-cols-4 gap-4">
-      <div class="bg-white rounded-2xl p-6 shadow-sm">
-        <p class="text-gray-500 text-sm font-medium">Total Rooms</p>
-        <p class="text-3xl font-bold text-gray-900 mt-2">${stats.total}</p>
-      </div>
-      <div class="bg-white rounded-2xl p-6 shadow-sm">
-        <p class="text-gray-500 text-sm font-medium">Vacant</p>
-        <p class="text-3xl font-bold text-teal-600 mt-2">${stats.vacant}</p>
-      </div>
-      <div class="bg-white rounded-2xl p-6 shadow-sm">
-        <p class="text-gray-500 text-sm font-medium">Occupied</p>
-        <p class="text-3xl font-bold text-blue-600 mt-2">${stats.occupied}</p>
-      </div>
-      <div class="bg-white rounded-2xl p-6 shadow-sm">
-        <p class="text-gray-500 text-sm font-medium">Reserved</p>
-        <p class="text-3xl font-bold text-orange-600 mt-2">${stats.reserved}</p>
-      </div>
+  const section = document.getElementById('statsSection');
+  if (!section) return;
+
+  const cards = [
+    { label: 'Total', value: stats.total, color: 'gray' },
+    { label: 'Vacant', value: stats.vacant, color: 'teal' },
+    { label: 'Occupied', value: stats.occupied, color: 'red' },
+    { label: 'Reserved', value: stats.reserved, color: 'amber' }
+  ];
+
+  section.innerHTML = cards.map(c => `
+    <div class="flex-shrink-0 bg-white rounded-2xl p-4 shadow-sm border border-gray-100 min-w-[120px]">
+      <p class="text-xs font-bold text-gray-400 uppercase mb-1">${c.label}</p>
+      <p class="text-2xl font-black text-gray-900">${c.value}</p>
     </div>
-  `;
-}
+  `).join('');
+};
 
-async function renderRooms() {
-  let rooms = await loadRooms();
-  
-  // Apply filter
-  if (currentFilter !== 'all') {
-    rooms = rooms.filter(r => r.status === currentFilter);
-  }
+window.renderRooms = async function() {
+  const rooms = await loadRooms();
+  const grid = document.getElementById('roomGrid');
+  if (!grid) return;
 
-  const container = document.getElementById('roomsContainer');
-  
-  if (rooms.length === 0) {
-    container.innerHTML = '<p class="text-center text-gray-400 py-12">No rooms to display</p>';
+  const filtered = rooms.filter(r => currentFilter === 'all' || r.status === currentFilter);
+
+  if (filtered.length === 0) {
+    grid.innerHTML = `<div class="col-span-full py-20 text-center opacity-40">No rooms found matching "${currentFilter}"</div>`;
     return;
   }
 
-  container.innerHTML = rooms.map(room => `
-    <div class="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-shadow cursor-pointer" onclick="openModal('${room.roomNumber}')">
-      ${room.image ? `<img src="${room.image}" alt="${room.roomNumber}" class="w-full h-48 object-cover">` : `<div class="w-full h-48 bg-gradient-to-br from-teal-100 to-blue-100 flex items-center justify-center"><span class="text-teal-600 font-bold text-2xl">${formatRoomTitle(room.roomNumber)}</span></div>`}
-      <div class="p-4">
-        <h3 class="font-bold text-lg text-gray-900">${formatRoomTitle(room.roomNumber)}</h3>
-        <p class="text-sm text-gray-500">${room.type}</p>
-        <p class="text-teal-600 font-bold mt-2">${formatRent(room.rent)}</p>
-        <span class="inline-block mt-3 px-3 py-1 rounded-full text-xs font-semibold ${room.status === 'vacant' ? 'bg-teal-100 text-teal-700' : room.status === 'occupied' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}">
-          ${room.status}
-        </span>
+  grid.innerHTML = filtered.map(r => `
+    <div class="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 hover:shadow-xl transition-all cursor-pointer group" onclick="openModal('${r.roomNumber}')">
+      <div class="flex justify-between items-start mb-4">
+        <div>
+          <h3 class="text-lg font-black text-gray-900">${formatRoomTitle(r.roomNumber)}</h3>
+          <p class="text-xs font-bold text-gray-400 uppercase">${r.type}</p>
+        </div>
+        <span class="badge badge-${r.status}">${r.status}</span>
+      </div>
+      <div class="flex items-end justify-between">
+        <p class="text-xl font-bold text-teal-700">${formatRent(r.rent)}</p>
+        <div class="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 group-hover:bg-teal-50 group-hover:text-teal-600 transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+        </div>
       </div>
     </div>
   `).join('');
-}
+};
 
-async function renderPaymentStats() {
+window.renderPaymentStats = async function() {
   const stats = await getPaymentStats();
-  const container = document.getElementById('paymentStats');
-  
-  container.innerHTML = `
-    <div class="grid grid-cols-4 gap-4">
-      <div class="bg-white rounded-2xl p-6 shadow-sm">
-        <p class="text-gray-500 text-sm font-medium">Total Collected</p>
-        <p class="text-3xl font-bold text-teal-600 mt-2">${formatRent(stats.totalCollected)}</p>
-      </div>
-      <div class="bg-white rounded-2xl p-6 shadow-sm">
-        <p class="text-gray-500 text-sm font-medium">Paid Tenants</p>
-        <p class="text-3xl font-bold text-green-600 mt-2">${stats.paidTenants}</p>
-      </div>
-      <div class="bg-white rounded-2xl p-6 shadow-sm">
-        <p class="text-gray-500 text-sm font-medium">Unpaid Tenants</p>
-        <p class="text-3xl font-bold text-red-600 mt-2">${stats.unpaidTenants}</p>
-      </div>
-      <div class="bg-white rounded-2xl p-6 shadow-sm">
-        <p class="text-gray-500 text-sm font-medium">Late Payments</p>
-        <p class="text-3xl font-bold text-orange-600 mt-2">${stats.latePayments}</p>
-      </div>
+  const section = document.getElementById('paymentStats');
+  if (!section) return;
+
+  const cards = [
+    { label: 'Collected', value: formatRent(stats.totalCollected), color: 'teal' },
+    { label: 'Paid', value: stats.paidTenants, color: 'teal' },
+    { label: 'Unpaid', value: stats.unpaidTenants, color: 'red' },
+    { label: 'Late', value: stats.latePayments, color: 'red' },
+    { label: 'Pending', value: stats.pendingVerifications, color: 'amber' }
+  ];
+
+  section.innerHTML = cards.map(c => `
+    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+      <p class="text-[10px] font-bold text-gray-400 uppercase mb-1">${c.label}</p>
+      <p class="text-lg font-black text-gray-900 truncate">${c.value}</p>
     </div>
-  `;
-}
+  `).join('');
+};
 
-async function renderPayments() {
+window.renderPayments = async function() {
   const payments = await loadPayments();
-  const container = document.getElementById('paymentsContainer');
-  
-  if (payments.length === 0) {
-    container.innerHTML = '<p class="text-center text-gray-400 py-12">No payments to display</p>';
-    return;
-  }
+  const tableBody = document.getElementById('paymentTableBody');
+  const cardList = document.getElementById('paymentCardList');
+  if (!tableBody || !cardList) return;
 
-  container.innerHTML = `
-    <div class="space-y-3">
-      ${payments.map(p => `
-        <div class="bg-white rounded-2xl p-4 flex items-center justify-between">
-          <div class="flex-1">
-            <h3 class="font-bold text-gray-900">${p.tenantName}</h3>
-            <p class="text-sm text-gray-500">${p.unitNumber} • ${p.transactionCode}</p>
-            <p class="text-xs text-gray-400 mt-1">${timeAgo(p.date)}</p>
-          </div>
-          <div class="text-right mr-4">
-            <p class="font-bold text-lg text-gray-900">${formatRent(p.amount)}</p>
-            <span class="inline-block mt-2 px-3 py-1 rounded-full text-xs font-semibold ${p.status === 'verified' ? 'bg-green-100 text-green-700' : p.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}">
-              ${p.status}
-            </span>
-          </div>
-          ${p.receiptImage ? `<button onclick="viewReceipt('${p.receiptImage}')" class="p-2 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200">📸</button>` : ''}
+  const search = document.getElementById('paymentSearch')?.value?.toLowerCase() || '';
+  const filter = document.getElementById('statusFilter')?.value || 'all';
+
+  const filtered = payments.filter(p => {
+    const matchesSearch = p.tenantName.toLowerCase().includes(search) || p.unitNumber.toLowerCase().includes(search);
+    const matchesFilter = filter === 'all' || p.status === filter;
+    return matchesSearch && matchesFilter;
+  });
+
+  tableBody.innerHTML = filtered.map(p => `
+    <tr class="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+      <td class="py-4 pl-2">
+        <p class="font-bold text-gray-900">${p.tenantName}</p>
+        <p class="text-xs text-gray-400">Unit ${p.unitNumber}</p>
+      </td>
+      <td class="py-4 font-bold text-teal-700">${formatRent(p.amount)}</td>
+      <td class="py-4 text-xs font-mono text-gray-500">${p.transactionCode}</td>
+      <td class="py-4 text-xs text-gray-500">${timeAgo(p.date)}</td>
+      <td class="py-4 text-center"><span class="badge badge-${p.status}">${p.status}</span></td>
+      <td class="py-4 text-right pr-2">
+        <div class="flex justify-end gap-2">
+          ${p.receiptImage ? `<button onclick="viewReceipt('${p.receiptImage}')" class="p-2 rounded-lg bg-teal-50 text-teal-600 hover:bg-teal-100 transition-colors" title="View Receipt">📄</button>` : ''}
           ${p.status === 'pending' ? `
-            <div class="flex gap-2 ml-4">
-              <button onclick="handlePaymentAction('${p.id}', 'verified')" class="px-4 py-2 bg-green-600 text-white rounded-xl text-xs font-bold">✓</button>
-              <button onclick="handlePaymentAction('${p.id}', 'rejected')" class="px-4 py-2 bg-red-600 text-white rounded-xl text-xs font-bold">✕</button>
-            </div>
+            <button onclick="handlePaymentAction('${p.id}', 'verified')" class="p-2 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors">✓</button>
+            <button onclick="handlePaymentAction('${p.id}', 'rejected')" class="p-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors">✕</button>
           ` : ''}
         </div>
-      `).join('')}
-    </div>
-  `;
-}
+      </td>
+    </tr>
+  `).join('');
 
-function generateQR() {
+  cardList.innerHTML = filtered.map(p => `
+    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+      <div class="flex justify-between items-start mb-3">
+        <div>
+          <p class="font-bold text-gray-900">${p.tenantName}</p>
+          <p class="text-xs text-gray-400">Unit ${p.unitNumber}</p>
+        </div>
+        <span class="badge badge-${p.status}">${p.status}</span>
+      </div>
+      <div class="flex justify-between items-center mb-4">
+        <p class="font-bold text-teal-700">${formatRent(p.amount)}</p>
+        <p class="text-[10px] text-gray-400">${timeAgo(p.date)}</p>
+      </div>
+      <div class="flex gap-2">
+        ${p.receiptImage ? `<button onclick="viewReceipt('${p.receiptImage}')" class="flex-1 py-2 rounded-xl bg-teal-50 text-teal-600 text-xs font-bold">View Receipt</button>` : ''}
+        ${p.status === 'pending' ? `
+          <button onclick="handlePaymentAction('${p.id}', 'verified')" class="flex-1 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold">Verify</button>
+          <button onclick="handlePaymentAction('${p.id}', 'rejected')" class="flex-1 py-2 rounded-xl bg-red-50 text-red-600 text-xs font-bold">Reject</button>
+        ` : ''}
+      </div>
+    </div>
+  `).join('');
+};
+
+window.filterPayments = function() {
+  renderPayments();
+};
+
+window.generateQR = function() {
   const container = document.getElementById('qrCode');
   if (!container) return;
-  
-  const baseUrl = window.location.href.replace(/\/[^\/]*$/, '/');
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(baseUrl + 'tenant.html')}`;
-  
-  container.innerHTML = `<img src="${qrUrl}" alt="Tenant Portal QR Code" class="w-full max-w-xs mx-auto">`;
-}
+  container.innerHTML = '';
+  const base = window.location.href.replace(/\/[^\/]*$/, '/');
+  const tenantUrl = base + 'tenant.html';
+  new QRCode(container, {
+    text: tenantUrl,
+    width: 160,
+    height: 160,
+    colorDark: "#0d9488",
+    colorLight: "#ffffff",
+    correctLevel: QRCode.CorrectLevel.H
+  });
+};
 
-function showToast(message) {
-  const toast = document.createElement('div');
-  toast.className = 'fixed bottom-4 right-4 bg-gray-900 text-white px-6 py-3 rounded-xl shadow-lg text-sm font-medium animate-pulse';
-  toast.textContent = message;
-  document.body.appendChild(toast);
-  
-  setTimeout(() => {
-    toast.style.opacity = '0';
-    toast.style.transition = 'opacity 0.3s ease';
-    setTimeout(() => toast.remove(), 300);
-  }, 2000);
-}
+window.showToast = function(msg) {
+  const toast = document.getElementById('toast');
+  if (!toast) return;
+  toast.textContent = msg;
+  toast.classList.add('active');
+  setTimeout(() => toast.classList.remove('active'), 3000);
+};
