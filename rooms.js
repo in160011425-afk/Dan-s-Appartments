@@ -4,33 +4,21 @@
 
 // These will be initialized in the HTML or here if hardcoded
 // ---- SECURE INITIALIZATION ----
-const SUPABASE_URL = window.ENV?.SUPABASE_URL || '';
-const SUPABASE_ANON_KEY = window.ENV?.SUPABASE_ANON_KEY || '';
+const _supabase = supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+window._supabase = _supabase; 
 
-let supabase;
-
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_URL.includes('__') || SUPABASE_ANON_KEY.includes('__')) {
-  console.error("System Configuration Error: Missing API Credentials.");
-  alert("System Configuration Error: Missing API Credentials.");
-} else {
-  try {
-    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  } catch (e) {
-    console.error("Supabase failed to initialize. Check your URL and Key.", e);
-  }
-}
 
 const LANDLORD_PHONE = '254712345678';
 
 // ---- AUTH HELPER ----
 async function getCurrentUser() {
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { session } } = await _supabase.auth.getSession();
   return session?.user || null;
 }
 
 // ---- ROOMS DATA ----
 async function loadRooms() {
-  const { data, error } = await supabase
+  const { data, error } = await _supabase
     .from('rooms')
     .select('*')
     .order('room_number', { ascending: true });
@@ -69,7 +57,7 @@ async function updateRoom(roomNumber, updates) {
   
   dbUpdates.updated_at = new Date().toISOString();
 
-  const { data, error } = await supabase
+  const { data, error } = await _supabase
     .from('rooms')
     .update(dbUpdates)
     .eq('room_number', roomNumber)
@@ -84,7 +72,7 @@ async function updateRoom(roomNumber, updates) {
 }
 
 async function findRoom(roomNumber) {
-  const { data, error } = await supabase
+  const { data, error } = await _supabase
     .from('rooms')
     .select('*')
     .eq('room_number', roomNumber.trim())
@@ -106,7 +94,7 @@ async function findRoom(roomNumber) {
 
 // Secure lookup for Tenant Portal
 async function verifyRoomAccess(roomNumber, roomPassword) {
-  const { data, error } = await supabase
+  const { data, error } = await _supabase
     .from('rooms')
     .select('*')
     .eq('room_number', roomNumber.trim())
@@ -139,7 +127,7 @@ async function getRoomStats() {
 
 // ---- PAYMENTS DATA ----
 async function loadPayments() {
-  const { data, error } = await supabase
+  const { data, error } = await _supabase
     .from('payments')
     .select('*')
     .order('created_at', { ascending: false });
@@ -167,7 +155,7 @@ async function updatePaymentStatus(paymentId, status) {
   const user = await getCurrentUser();
   if (!user) throw new Error('Unauthorized');
 
-  const { data, error } = await supabase
+  const { data, error } = await _supabase
     .from('payments')
     .update({ status, updated_at: new Date().toISOString() })
     .eq('id', paymentId)
