@@ -4,15 +4,59 @@
 
 let currentFilter = 'all';
 
-// ---- Initialize ----
-document.addEventListener('DOMContentLoaded', () => {
-  initializePayments(); // Ensure data exists
-  renderStats();
-  renderRooms();
-  renderPaymentStats();
-  renderPayments();
-  generateQR();
+// ---- AUTH & INITIALIZATION ----
+document.addEventListener('DOMContentLoaded', async () => {
+  // Listen for Auth changes
+  supabase.auth.onAuthStateChange((event, session) => {
+    const loginModal = document.getElementById('loginModal');
+    if (session) {
+      loginModal.classList.add('hidden');
+      loginModal.classList.remove('!flex');
+      initializeApp();
+    } else {
+      loginModal.classList.remove('hidden');
+      loginModal.classList.add('!flex');
+    }
+  });
+
+  // Check initial session
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) {
+    document.getElementById('loginModal').classList.add('!flex');
+  } else {
+    initializeApp();
+  }
 });
+
+async function handleLogin() {
+  const email = document.getElementById('loginEmail').value;
+  const password = document.getElementById('loginPassword').value;
+  const btn = document.getElementById('loginBtn');
+
+  if (!email || !password) {
+    showToast('⚠️ Email and password required');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Authenticating...';
+
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+  if (error) {
+    showToast('❌ ' + error.message);
+    btn.disabled = false;
+    btn.textContent = 'Access Dashboard';
+  }
+}
+
+async function initializeApp() {
+  await renderStats();
+  await renderRooms();
+  await renderPaymentStats();
+  await renderPayments();
+  generateQR();
+}
 
 // ---- NAVIGATION ----
 function switchView(view) {
@@ -43,8 +87,8 @@ function switchView(view) {
 }
 
 // ---- PAYMENT DASHBOARD ----
-function renderPaymentStats() {
-  const s = getPaymentStats();
+async function renderPaymentStats() {
+  const s = await getPaymentStats();
   const el = document.getElementById('paymentStats');
   if (!el) return;
 
@@ -67,8 +111,8 @@ function renderPaymentStats() {
   `).join('');
 }
 
-function renderPayments() {
-  const payments = loadPayments();
+async function renderPayments() {
+  const payments = await loadPayments();
   const searchTerm = document.getElementById('paymentSearch')?.value.toLowerCase() || '';
   const statusFilter = document.getElementById('statusFilter')?.value || 'all';
 
@@ -83,79 +127,71 @@ function renderPayments() {
 
   if (filtered.length === 0) {
     const empty = `<div class="py-10 text-center text-gray-400 col-span-full">No payment records found.</div>`;
-    tableBody.innerHTML = `<tr><td colspan="6">${empty}</td></tr>`;
-    cardList.innerHTML = empty;
+    if (tableBody) tableBody.innerHTML = `<tr><td colspan="6">${empty}</td></tr>`;
+    if (cardList) cardList.innerHTML = empty;
     return;
   }
 
   // Desktop Table
-  tableBody.innerHTML = filtered.map(p => `
-    <tr class="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-      <td class="py-4 pl-2">
-        <div class="font-bold text-gray-900">${p.tenantName}</div>
-        <div class="text-xs text-gray-500">${formatRoomTitle(p.unitNumber)}</div>
-      </td>
-      <td class="py-4 font-bold text-teal-700">${formatRent(p.amount)}</td>
-      <td class="py-4 font-mono text-xs text-gray-600">${p.transactionCode}</td>
-      <td class="py-4 text-xs text-gray-500">${new Date(p.date).toLocaleDateString('en-KE', { day: 'numeric', month: 'short' })}</td>
-      <td class="py-4 text-center">
-        <span class="badge badge-${p.status}">${p.status}</span>
-      </td>
-      <td class="py-4 text-right pr-2">
-        <div class="flex justify-end gap-2">
-          <button onclick="viewReceipt('${p.receiptImage}')" class="p-2 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200" title="View Receipt">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-          </button>
-          ${p.status === 'pending' ? `
-            <button onclick="handlePaymentAction('${p.id}', 'verified')" class="p-2 rounded-xl bg-green-100 text-green-600 hover:bg-green-600 hover:text-white" title="Verify">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+  if (tableBody) {
+    tableBody.innerHTML = filtered.map(p => `
+      <tr class="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+        <td class="py-4 pl-2">
+          <div class="font-bold text-gray-900">${p.tenantName}</div>
+          <div class="text-xs text-gray-500">${formatRoomTitle(p.unitNumber)}</div>
+        </td>
+        <td class="py-4 font-bold text-teal-700">${formatRent(p.amount)}</td>
+        <td class="py-4 font-mono text-xs text-gray-600">${p.transactionCode}</td>
+        <td class="py-4 text-xs text-gray-500">${new Date(p.date).toLocaleDateString('en-KE', { day: 'numeric', month: 'short' })}</td>
+        <td class="py-4 text-center">
+          <span class="badge badge-${p.status}">${p.status}</span>
+        </td>
+        <td class="py-4 text-right pr-2">
+          <div class="flex justify-end gap-2">
+            <button onclick="viewReceipt('${p.receiptImage}')" class="p-2 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200" title="View Receipt">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
             </button>
-            <button onclick="handlePaymentAction('${p.id}', 'rejected')" class="p-2 rounded-xl bg-red-100 text-red-600 hover:bg-red-600 hover:text-white" title="Reject">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-            </button>
-          ` : ''}
-        </div>
-      </td>
-    </tr>
-  `).join('');
+            ${p.status === 'pending' ? `
+              <button onclick="handlePaymentAction('${p.id}', 'verified')" class="p-2 rounded-xl bg-green-100 text-green-600 hover:bg-green-600 hover:text-white" title="Verify">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+              </button>
+              <button onclick="handlePaymentAction('${p.id}', 'rejected')" class="p-2 rounded-xl bg-red-100 text-red-600 hover:bg-red-600 hover:text-white" title="Reject">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            ` : ''}
+          </div>
+        </td>
+      </tr>
+    `).join('');
+  }
 
   // Mobile Cards
-  cardList.innerHTML = filtered.map(p => `
-    <div class="bg-gray-50 rounded-2xl p-4 border border-gray-100">
-      <div class="flex justify-between items-start mb-3">
-        <div>
-          <div class="font-bold text-gray-900">${p.tenantName}</div>
-          <div class="text-xs text-gray-500">${formatRoomTitle(p.unitNumber)} • ${new Date(p.date).toLocaleDateString()}</div>
+  if (cardList) {
+    cardList.innerHTML = filtered.map(p => `
+      <div class="bg-gray-50 rounded-2xl p-4 border border-gray-100">
+        <div class="flex justify-between items-start mb-3">
+          <div>
+            <div class="font-bold text-gray-900">${p.tenantName}</div>
+            <div class="text-xs text-gray-500">${formatRoomTitle(p.unitNumber)} • ${new Date(p.date).toLocaleDateString()}</div>
+          </div>
+          <span class="badge badge-${p.status}">${p.status}</span>
         </div>
-        <span class="badge badge-${p.status}">${p.status}</span>
-      </div>
-      <div class="flex justify-between items-center">
-        <div class="text-sm font-bold text-teal-700">${formatRent(p.amount)} <span class="text-[10px] font-mono text-gray-400 ml-2">${p.transactionCode}</span></div>
-        <div class="flex gap-2">
-          <button onclick="viewReceipt('${p.receiptImage}')" class="btn-action bg-white border border-gray-200 text-gray-600 py-2 px-3 text-xs">Receipt</button>
-          ${p.status === 'pending' ? `
-            <button onclick="handlePaymentAction('${p.id}', 'verified')" class="btn-action bg-green-500 text-white py-2 px-3 text-xs">Verify</button>
-          ` : ''}
+        <div class="flex justify-between items-center">
+          <div class="text-sm font-bold text-teal-700">${formatRent(p.amount)} <span class="text-[10px] font-mono text-gray-400 ml-2">${p.transactionCode}</span></div>
+          <div class="flex gap-2">
+            <button onclick="viewReceipt('${p.receiptImage}')" class="btn-action bg-white border border-gray-200 text-gray-600 py-2 px-3 text-xs">Receipt</button>
+            ${p.status === 'pending' ? `
+              <button onclick="handlePaymentAction('${p.id}', 'verified')" class="btn-action bg-green-500 text-white py-2 px-3 text-xs">Verify</button>
+            ` : ''}
+          </div>
         </div>
       </div>
-    </div>
-  `).join('');
+    `).join('');
+  }
 }
 
-function setFilter(filter) {
-  currentFilter = filter;
-  const select = document.getElementById('statusFilter');
-  if (select) select.value = filter;
-  renderPayments();
-  renderRooms(); // Update both views if needed
-}
-
-function filterPayments() {
-  renderPayments();
-}
-
-function handlePaymentAction(id, status) {
-  const updated = updatePaymentStatus(id, status);
+async function handlePaymentAction(id, status) {
+  const updated = await updatePaymentStatus(id, status);
   if (updated) {
     showToast(`Payment for ${updated.tenantName} ${status}`);
     renderPaymentStats();
@@ -163,47 +199,9 @@ function handlePaymentAction(id, status) {
   }
 }
 
-function viewReceipt(url) {
-  const modal = document.getElementById('receiptModal');
-  const img = document.getElementById('receiptPreview');
-  img.src = url;
-  modal.classList.add('active');
-}
-
-function closeReceiptModal() {
-  document.getElementById('receiptModal').classList.remove('active');
-}
-
-function downloadPaymentReport() {
-  const payments = loadPayments();
-  const headers = ['Tenant Name', 'Unit Number', 'Amount', 'Transaction Code', 'Status', 'Date', 'Month'];
-  const rows = payments.map(p => [
-    p.tenantName,
-    p.unitNumber,
-    p.amount,
-    p.transactionCode,
-    p.status,
-    new Date(p.date).toLocaleDateString(),
-    p.month
-  ]);
-
-  let csvContent = "data:text/csv;charset=utf-8," 
-    + headers.join(",") + "\n"
-    + rows.map(e => e.join(",")).join("\n");
-
-  const encodedUri = encodeURI(csvContent);
-  const link = document.createElement("a");
-  link.setAttribute("href", encodedUri);
-  link.setAttribute("download", `rent-payments-report-${new Date().toISOString().split('T')[0]}.csv`);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  showToast('📥 Report downloaded');
-}
-
-// ---- ROOM STATS & CARDS (RE-USE EXISTING) ----
-function renderStats() {
-  const s = getRoomStats();
+// ---- ROOM MANAGEMENT ----
+async function renderStats() {
+  const s = await getRoomStats();
   const el = document.getElementById('statsSection');
   if (!el) return;
   el.innerHTML = `
@@ -238,10 +236,8 @@ function renderStats() {
   `;
 }
 
-// ... (keep the rest of app.js logic but ensure compatibility)
-
-function renderRooms() {
-  const rooms = loadRooms();
+async function renderRooms() {
+  const rooms = await loadRooms();
   const filtered = currentFilter === 'all' ? rooms : rooms.filter(r => r.status === currentFilter);
   const grid = document.getElementById('roomGrid');
   if (!grid) return;
@@ -263,9 +259,123 @@ function renderRooms() {
   `).join('');
 }
 
-// ... (keep openModal, closeModal, etc.)
+async function openModal(roomNumber) {
+  const room = await findRoom(roomNumber);
+  if (!room) return;
 
-// ---- TOAST ----
+  const modal = document.getElementById('roomModal');
+  const body = document.getElementById('modalBody');
+
+  body.innerHTML = `
+    <div class="p-6">
+      <div class="flex justify-between items-start mb-6">
+        <div>
+          <h2 class="text-2xl font-bold text-gray-900">${formatRoomTitle(room.roomNumber)}</h2>
+          <p class="text-sm text-gray-500">${room.type}</p>
+        </div>
+        <button onclick="closeModal()" class="p-2 rounded-xl bg-gray-100 text-gray-400">✕</button>
+      </div>
+
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Status</label>
+          <div class="grid grid-cols-3 gap-2">
+            ${['vacant', 'occupied', 'reserved'].map(s => `
+              <button onclick="updateRoomField('${room.roomNumber}', 'status', '${s}')" class="py-3 px-2 rounded-xl text-xs font-bold capitalize transition-all ${room.status === s ? 'bg-teal-600 text-white shadow-lg shadow-teal-100' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}">
+                ${s}
+              </button>
+            `).join('')}
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Room Password (for Tenant Portal)</label>
+          <input type="text" id="roomPasswordInput" value="${room.roomPassword || ''}" placeholder="Enter password..." class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-teal-500 text-sm">
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Monthly Rent</label>
+            <input type="number" id="roomRentInput" value="${room.rent}" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-teal-500 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Room Type</label>
+            <input type="text" id="roomTypeInput" value="${room.type}" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-teal-500 text-sm">
+          </div>
+        </div>
+
+        <button onclick="saveRoomDetails('${room.roomNumber}')" class="w-full py-4 bg-teal-600 text-white font-bold rounded-2xl shadow-lg shadow-teal-100 mt-4 transition-all active:scale-95">
+          Save All Changes
+        </button>
+      </div>
+    </div>
+  `;
+  modal.classList.add('active');
+}
+
+async function updateRoomField(roomNumber, field, value) {
+  const updates = {};
+  updates[field] = value;
+  const res = await updateRoom(roomNumber, updates);
+  if (res) {
+    showToast(`Updated ${field}`);
+    await renderStats();
+    await renderRooms();
+    // Refresh modal
+    openModal(roomNumber);
+  }
+}
+
+async function saveRoomDetails(roomNumber) {
+  const password = document.getElementById('roomPasswordInput').value;
+  const rent = document.getElementById('roomRentInput').value;
+  const type = document.getElementById('roomTypeInput').value;
+
+  const updates = {
+    roomPassword: password,
+    rent: parseInt(rent),
+    type: type
+  };
+
+  const res = await updateRoom(roomNumber, updates);
+  if (res) {
+    showToast('Room details updated');
+    closeModal();
+    await renderStats();
+    await renderRooms();
+  }
+}
+
+function closeModal() {
+  document.getElementById('roomModal').classList.remove('active');
+}
+
+// ---- UI UTILS ----
+function setFilter(filter) {
+  currentFilter = filter;
+  const buttons = document.querySelectorAll('.filter-btn');
+  buttons.forEach(btn => {
+    if (btn.dataset.filter === filter) btn.classList.add('active');
+    else btn.classList.remove('active');
+  });
+  renderRooms();
+}
+
+function filterPayments() {
+  renderPayments();
+}
+
+function viewReceipt(url) {
+  const modal = document.getElementById('receiptModal');
+  const img = document.getElementById('receiptPreview');
+  img.src = url;
+  modal.classList.add('active');
+}
+
+function closeReceiptModal() {
+  document.getElementById('receiptModal').classList.remove('active');
+}
+
 function showToast(msg) {
   const t = document.getElementById('toast');
   if (!t) return;
@@ -291,38 +401,131 @@ function generateQR() {
   });
 }
 
-function downloadQR() {
-  const canvas = document.querySelector('#qrCode canvas');
-  if (!canvas) { showToast('⚠️ QR code not ready'); return; }
-  const link = document.createElement('a');
-  link.download = 'rentals-qr.png';
-  link.href = canvas.toDataURL('image/png');
-  link.click();
-}
-
 function copyTenantLink() {
   const base = window.location.href.replace(/\/[^\/]*$/, '/');
   const tenantUrl = base + 'tenant.html';
   navigator.clipboard.writeText(tenantUrl).then(() => showToast('🔗 Link copied'));
 }
 
+async function openAddRoomModal() {
+  const modal = document.getElementById('roomModal');
+  const body = document.getElementById('modalBody');
+
+  body.innerHTML = `
+    <div class="p-6">
+      <div class="flex justify-between items-start mb-6">
+        <div>
+          <h2 class="text-2xl font-bold text-gray-900">Add New Room</h2>
+          <p class="text-sm text-gray-500">Create a new property listing</p>
+        </div>
+        <button onclick="closeModal()" class="p-2 rounded-xl bg-gray-100 text-gray-400">✕</button>
+      </div>
+
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Room Number</label>
+          <input type="text" id="newRoomNumber" placeholder="e.g. 11" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-teal-500 text-sm">
+        </div>
+        
+        <div>
+          <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Room Password (for Tenant Portal)</label>
+          <input type="text" id="newRoomPassword" placeholder="Set access password..." class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-teal-500 text-sm">
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Monthly Rent</label>
+            <input type="number" id="newRoomRent" placeholder="8500" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-teal-500 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Room Type</label>
+            <input type="text" id="newRoomType" placeholder="Bedsitter" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-teal-500 text-sm">
+          </div>
+        </div>
+
+        <button onclick="createNewRoom()" class="w-full py-4 bg-teal-600 text-white font-bold rounded-2xl shadow-lg shadow-teal-100 mt-4 transition-all active:scale-95">
+          Create Room Listing
+        </button>
+      </div>
+    </div>
+  `;
+  modal.classList.add('active');
+}
+
+async function createNewRoom() {
+  const roomNumber = document.getElementById('newRoomNumber').value;
+  const roomPassword = document.getElementById('newRoomPassword').value;
+  const rent = document.getElementById('newRoomRent').value;
+  const type = document.getElementById('newRoomType').value;
+
+  if (!roomNumber || !rent) {
+    showToast('⚠️ Room number and rent are required');
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from('rooms')
+    .insert([{
+      room_number: roomNumber,
+      room_password: roomPassword,
+      rent: parseInt(rent),
+      type: type,
+      status: 'vacant',
+      updated_at: new Date().toISOString()
+    }])
+    .select();
+
+  if (error) {
+    showToast('❌ Error: ' + error.message);
+  } else {
+    showToast('✅ New room added successfully');
+    closeModal();
+    await renderStats();
+    await renderRooms();
+  }
+}
+
+async function downloadPaymentReport() {
+  const payments = await loadPayments();
+  const headers = ['Tenant Name', 'Unit Number', 'Amount', 'Transaction Code', 'Status', 'Date', 'Month'];
+  const rows = payments.map(p => [
+    p.tenantName,
+    p.unitNumber,
+    p.amount,
+    p.transactionCode,
+    p.status,
+    new Date(p.date).toLocaleDateString(),
+    p.month
+  ]);
+
+  let csvContent = "data:text/csv;charset=utf-8," 
+    + headers.join(",") + "\n"
+    + rows.map(e => e.join(",")).join("\n");
+
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement("a");
+  link.setAttribute("href", encodedUri);
+  link.setAttribute("download", `rent-payments-report-${new Date().toISOString().split('T')[0]}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  showToast('📥 Report downloaded');
+}
+
 // ---- GLOBAL EXPOSURE ----
+window.handleLogin = handleLogin;
 window.setFilter = setFilter;
 window.renderPayments = renderPayments;
 window.filterPayments = filterPayments;
-window.downloadPaymentReport = downloadPaymentReport;
 window.switchView = switchView;
 window.handlePaymentAction = handlePaymentAction;
 window.viewReceipt = viewReceipt;
 window.closeReceiptModal = closeReceiptModal;
-
-window.addEventListener('storage', (e) => {
-  if (e.key === STORAGE_KEY) {
-    renderStats();
-    renderRooms();
-  }
-  if (e.key === (typeof PAYMENTS_KEY !== 'undefined' ? PAYMENTS_KEY : 'rentalPayments')) {
-    renderPaymentStats();
-    renderPayments();
-  }
-});
+window.openModal = openModal;
+window.closeModal = closeModal;
+window.updateRoomField = updateRoomField;
+window.saveRoomDetails = saveRoomDetails;
+window.copyTenantLink = copyTenantLink;
+window.openAddRoomModal = openAddRoomModal;
+window.createNewRoom = createNewRoom;
+window.downloadPaymentReport = downloadPaymentReport;
