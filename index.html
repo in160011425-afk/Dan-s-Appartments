@@ -58,7 +58,22 @@
     
     <button onclick="switchView('payments')" id="nav-payments" class="nav-item flex-1 lg:flex-none flex flex-col lg:flex-row items-center gap-1 lg:gap-3 p-3 rounded-2xl transition-all duration-300 text-gray-400">
       <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-      <span class="text-[10px] lg:text-sm font-bold uppercase tracking-wider">Rent Payments</span>
+      <span class="text-[10px] lg:text-sm font-bold uppercase tracking-wider">Rent</span>
+    </button>
+
+    <button onclick="switchView('tenants')" id="nav-tenants" class="nav-item flex-1 lg:flex-none flex flex-col lg:flex-row items-center gap-1 lg:gap-3 p-3 rounded-2xl transition-all duration-300 text-gray-400">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+      <span class="text-[10px] lg:text-sm font-bold uppercase tracking-wider">Tenants</span>
+    </button>
+
+    <button onclick="switchView('notices')" id="nav-notices" class="nav-item flex-1 lg:flex-none flex flex-col lg:flex-row items-center gap-1 lg:gap-3 p-3 rounded-2xl transition-all duration-300 text-gray-400">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/></svg>
+      <span class="text-[10px] lg:text-sm font-bold uppercase tracking-wider">Notices</span>
+    </button>
+
+    <button onclick="switchView('maintenance')" id="nav-maintenance" class="nav-item flex-1 lg:flex-none flex flex-col lg:flex-row items-center gap-1 lg:gap-3 p-3 rounded-2xl transition-all duration-300 text-gray-400">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+      <span class="text-[10px] lg:text-sm font-bold uppercase tracking-wider">Fixes</span>
     </button>
 
     <div class="lg:mt-auto pt-2 lg:pt-6 border-t border-gray-100 lg:border-none">
@@ -153,8 +168,57 @@
           </table>
           
           <div id="paymentCardList" class="lg:hidden space-y-4"></div>
+    </div>
+
+    <!-- ===== TENANTS VIEW ===== -->
+    <div id="tenantsView" class="view-content hidden fade-in px-4 pt-6">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h2 class="text-2xl font-bold text-gray-900 mb-1">Tenant Registry</h2>
+          <p class="text-sm text-gray-500">Manage active residents and lease information.</p>
         </div>
-      </section>
+        <button onclick="openNewTenantModal()" class="btn-action bg-teal-600 text-white shadow-lg shadow-teal-100 py-3 px-6 rounded-2xl flex items-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg>
+          Add Tenant
+        </button>
+      </div>
+      <div id="tenantsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+    </div>
+
+    <!-- ===== NOTICES VIEW ===== -->
+    <div id="noticesView" class="view-content hidden fade-in px-4 pt-6">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h2 class="text-2xl font-bold text-gray-900 mb-1">Notice Board</h2>
+          <p class="text-sm text-gray-500 text-balance">Broadcast official updates to all tenants instantly.</p>
+        </div>
+        <button onclick="openNewNoticeModal()" class="btn-action bg-teal-600 text-white shadow-lg shadow-teal-100 py-3 px-6 rounded-2xl flex items-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+          Post Notice
+        </button>
+      </div>
+      <div id="noticesList" class="space-y-4"></div>
+    </div>
+
+    <!-- ===== MAINTENANCE VIEW ===== -->
+    <div id="maintenanceView" class="view-content hidden fade-in px-4 pt-6">
+      <h2 class="text-2xl font-bold text-gray-900 mb-1">Maintenance Dispatch</h2>
+      <p class="text-sm text-gray-500 mb-8">Track and resolve unit repair requests.</p>
+      
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="space-y-4">
+          <h3 class="text-xs font-black text-gray-400 uppercase tracking-widest pl-2">Pending Requests</h3>
+          <div id="pendingMaintenance" class="space-y-3"></div>
+        </div>
+        <div class="space-y-4">
+          <h3 class="text-xs font-black text-gray-400 uppercase tracking-widest pl-2">In Progress</h3>
+          <div id="activeMaintenance" class="space-y-3"></div>
+        </div>
+        <div class="space-y-4">
+          <h3 class="text-xs font-black text-gray-400 uppercase tracking-widest pl-2">Recently Resolved</h3>
+          <div id="resolvedMaintenance" class="space-y-3"></div>
+        </div>
+      </div>
     </div>
   </main>
 
