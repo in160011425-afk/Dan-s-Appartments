@@ -70,7 +70,7 @@ window.handleLogin = async function() {
 
   try {
     btn.disabled = true;
-    btn.innerHTML = '<span class="flex items-center justify-center gap-2"><svg class="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Authenticating...</span>';
+    btn.innerHTML = '<span class="flex items-center justify-center gap-2"><svg class="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Signing in...</span>';
 
     const { data, error } = await db.auth.signInWithPassword({ email, password });
 
@@ -203,7 +203,7 @@ window.openModal = async function(roomNumber) {
           <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Status</label>
           <div class="grid grid-cols-3 gap-2">
             ${['vacant', 'occupied', 'reserved'].map(s => `
-              <button onclick="updateRoomField('${room.roomNumber}', 'status', '${s}')" class="py-3 px-2 rounded-xl text-xs font-bold capitalize transition-all ${room.status === s ? 'bg-teal-600 text-white shadow-lg shadow-teal-100' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}">
+              <button onclick="updateRoomField('${room.roomNumber}', 'status', '${s}')" class="py-3 px-2 rounded-xl text-xs font-bold capitalize transition-all ${room.status === s ? 'bg-teal-600 text-white shadow-lg shadow-teal-100' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}">
                 ${s}
               </button>
             `).join('')}
@@ -432,3 +432,159 @@ window.copyTenantLink = function() {
   const tenantUrl = base + 'tenant.html';
   navigator.clipboard.writeText(tenantUrl).then(() => showToast('🔗 Link copied'));
 };
+
+// ---- RENDERING & UI ----
+async function initializeApp() {
+  await renderStats();
+  await renderRooms();
+  generateQR();
+}
+
+function clearDashboard() {
+  const statsContainer = document.getElementById('stats');
+  const roomsContainer = document.getElementById('roomsContainer');
+  if (statsContainer) statsContainer.innerHTML = '';
+  if (roomsContainer) roomsContainer.innerHTML = '';
+}
+
+async function renderStats() {
+  const stats = await getRoomStats();
+  const container = document.getElementById('stats');
+  
+  container.innerHTML = `
+    <div class="grid grid-cols-4 gap-4">
+      <div class="bg-white rounded-2xl p-6 shadow-sm">
+        <p class="text-gray-500 text-sm font-medium">Total Rooms</p>
+        <p class="text-3xl font-bold text-gray-900 mt-2">${stats.total}</p>
+      </div>
+      <div class="bg-white rounded-2xl p-6 shadow-sm">
+        <p class="text-gray-500 text-sm font-medium">Vacant</p>
+        <p class="text-3xl font-bold text-teal-600 mt-2">${stats.vacant}</p>
+      </div>
+      <div class="bg-white rounded-2xl p-6 shadow-sm">
+        <p class="text-gray-500 text-sm font-medium">Occupied</p>
+        <p class="text-3xl font-bold text-blue-600 mt-2">${stats.occupied}</p>
+      </div>
+      <div class="bg-white rounded-2xl p-6 shadow-sm">
+        <p class="text-gray-500 text-sm font-medium">Reserved</p>
+        <p class="text-3xl font-bold text-orange-600 mt-2">${stats.reserved}</p>
+      </div>
+    </div>
+  `;
+}
+
+async function renderRooms() {
+  let rooms = await loadRooms();
+  
+  // Apply filter
+  if (currentFilter !== 'all') {
+    rooms = rooms.filter(r => r.status === currentFilter);
+  }
+
+  const container = document.getElementById('roomsContainer');
+  
+  if (rooms.length === 0) {
+    container.innerHTML = '<p class="text-center text-gray-400 py-12">No rooms to display</p>';
+    return;
+  }
+
+  container.innerHTML = rooms.map(room => `
+    <div class="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-shadow cursor-pointer" onclick="openModal('${room.roomNumber}')">
+      ${room.image ? `<img src="${room.image}" alt="${room.roomNumber}" class="w-full h-48 object-cover">` : `<div class="w-full h-48 bg-gradient-to-br from-teal-100 to-blue-100 flex items-center justify-center"><span class="text-teal-600 font-bold text-2xl">${formatRoomTitle(room.roomNumber)}</span></div>`}
+      <div class="p-4">
+        <h3 class="font-bold text-lg text-gray-900">${formatRoomTitle(room.roomNumber)}</h3>
+        <p class="text-sm text-gray-500">${room.type}</p>
+        <p class="text-teal-600 font-bold mt-2">${formatRent(room.rent)}</p>
+        <span class="inline-block mt-3 px-3 py-1 rounded-full text-xs font-semibold ${room.status === 'vacant' ? 'bg-teal-100 text-teal-700' : room.status === 'occupied' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}">
+          ${room.status}
+        </span>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function renderPaymentStats() {
+  const stats = await getPaymentStats();
+  const container = document.getElementById('paymentStats');
+  
+  container.innerHTML = `
+    <div class="grid grid-cols-4 gap-4">
+      <div class="bg-white rounded-2xl p-6 shadow-sm">
+        <p class="text-gray-500 text-sm font-medium">Total Collected</p>
+        <p class="text-3xl font-bold text-teal-600 mt-2">${formatRent(stats.totalCollected)}</p>
+      </div>
+      <div class="bg-white rounded-2xl p-6 shadow-sm">
+        <p class="text-gray-500 text-sm font-medium">Paid Tenants</p>
+        <p class="text-3xl font-bold text-green-600 mt-2">${stats.paidTenants}</p>
+      </div>
+      <div class="bg-white rounded-2xl p-6 shadow-sm">
+        <p class="text-gray-500 text-sm font-medium">Unpaid Tenants</p>
+        <p class="text-3xl font-bold text-red-600 mt-2">${stats.unpaidTenants}</p>
+      </div>
+      <div class="bg-white rounded-2xl p-6 shadow-sm">
+        <p class="text-gray-500 text-sm font-medium">Late Payments</p>
+        <p class="text-3xl font-bold text-orange-600 mt-2">${stats.latePayments}</p>
+      </div>
+    </div>
+  `;
+}
+
+async function renderPayments() {
+  const payments = await loadPayments();
+  const container = document.getElementById('paymentsContainer');
+  
+  if (payments.length === 0) {
+    container.innerHTML = '<p class="text-center text-gray-400 py-12">No payments to display</p>';
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="space-y-3">
+      ${payments.map(p => `
+        <div class="bg-white rounded-2xl p-4 flex items-center justify-between">
+          <div class="flex-1">
+            <h3 class="font-bold text-gray-900">${p.tenantName}</h3>
+            <p class="text-sm text-gray-500">${p.unitNumber} • ${p.transactionCode}</p>
+            <p class="text-xs text-gray-400 mt-1">${timeAgo(p.date)}</p>
+          </div>
+          <div class="text-right mr-4">
+            <p class="font-bold text-lg text-gray-900">${formatRent(p.amount)}</p>
+            <span class="inline-block mt-2 px-3 py-1 rounded-full text-xs font-semibold ${p.status === 'verified' ? 'bg-green-100 text-green-700' : p.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}">
+              ${p.status}
+            </span>
+          </div>
+          ${p.receiptImage ? `<button onclick="viewReceipt('${p.receiptImage}')" class="p-2 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200">📸</button>` : ''}
+          ${p.status === 'pending' ? `
+            <div class="flex gap-2 ml-4">
+              <button onclick="handlePaymentAction('${p.id}', 'verified')" class="px-4 py-2 bg-green-600 text-white rounded-xl text-xs font-bold">✓</button>
+              <button onclick="handlePaymentAction('${p.id}', 'rejected')" class="px-4 py-2 bg-red-600 text-white rounded-xl text-xs font-bold">✕</button>
+            </div>
+          ` : ''}
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function generateQR() {
+  const container = document.getElementById('qrCode');
+  if (!container) return;
+  
+  const baseUrl = window.location.href.replace(/\/[^\/]*$/, '/');
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(baseUrl + 'tenant.html')}`;
+  
+  container.innerHTML = `<img src="${qrUrl}" alt="Tenant Portal QR Code" class="w-full max-w-xs mx-auto">`;
+}
+
+function showToast(message) {
+  const toast = document.createElement('div');
+  toast.className = 'fixed bottom-4 right-4 bg-gray-900 text-white px-6 py-3 rounded-xl shadow-lg text-sm font-medium animate-pulse';
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transition = 'opacity 0.3s ease';
+    setTimeout(() => toast.remove(), 300);
+  }, 2000);
+}
