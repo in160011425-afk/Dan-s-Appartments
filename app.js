@@ -4,39 +4,55 @@
 
 let currentFilter = 'all';
 
+const _supabase = supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+
 // ---- AUTH & INITIALIZATION ----
 document.addEventListener('DOMContentLoaded', async () => {
   // Wait for Supabase to be ready from rooms.js
-  if (!window.supabase) {
+  if (!window._supabase) {
     console.error("Supabase client not found. Ensure rooms.js is loaded.");
     return;
   }
 
   // Listen for Auth changes
-  supabase.auth.onAuthStateChange((event, session) => {
+  _supabase.auth.onAuthStateChange((event, session) => {
     console.log('Auth Event:', event);
     const loginModal = document.getElementById('loginModal');
+    const main = document.querySelector('main');
+    const nav = document.querySelector('nav');
+    
     if (session) {
       loginModal.classList.add('hidden');
       loginModal.classList.remove('active', '!flex');
+      if (main) main.classList.remove('hidden');
+      if (nav) nav.classList.remove('hidden');
       initializeApp();
     } else {
       loginModal.classList.remove('hidden');
       loginModal.classList.add('active', '!flex');
-      // Clear data on logout
+      if (main) main.classList.add('hidden');
+      if (nav) nav.classList.add('hidden');
       clearDashboard();
     }
   });
 
   // Check initial session
-  const { data: { session }, error } = await supabase.auth.getSession();
+  const { data: { session }, error } = await _supabase.auth.getSession();
   if (error) console.error("Session check error:", error);
   
+  const loginModal = document.getElementById('loginModal');
+  const main = document.querySelector('main');
+  const nav = document.querySelector('nav');
+
   if (!session) {
-    const modal = document.getElementById('loginModal');
-    modal.classList.remove('hidden');
-    modal.classList.add('active', '!flex');
+    loginModal.classList.remove('hidden');
+    loginModal.classList.add('active', '!flex');
+    if (main) main.classList.add('hidden');
+    if (nav) nav.classList.add('hidden');
   } else {
+    loginModal.classList.add('hidden');
+    if (main) main.classList.remove('hidden');
+    if (nav) nav.classList.remove('hidden');
     initializeApp();
   }
 });
@@ -55,7 +71,7 @@ async function handleLogin() {
     btn.disabled = true;
     btn.innerHTML = '<span class="flex items-center justify-center gap-2"><svg class="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Authenticating...</span>';
 
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await _supabase.auth.signInWithPassword({ email, password });
 
     if (error) throw error;
     
@@ -426,11 +442,7 @@ function generateQR() {
   container.innerHTML = '';
   
   // Robust URL construction
-  let base = window.location.origin + window.location.pathname;
-  if (!base.endsWith('/')) {
-    base = base.substring(0, base.lastIndexOf('/') + 1);
-  }
-  const tenantUrl = base + 'tenant.html';
+  const tenantUrl = window.location.origin + '/tenant.html';
   
   console.log('Generating QR for:', tenantUrl);
 
@@ -445,6 +457,40 @@ function generateQR() {
     });
   } catch (err) {
     console.error('QR Generation Failed:', err);
+  }
+}
+
+async function downloadQR() {
+  const container = document.getElementById('qrCode');
+  const img = container.querySelector('img');
+  const canvas = container.querySelector('canvas');
+  
+  if (!img && !canvas) {
+    showToast('❌ No QR code found');
+    return;
+  }
+
+  try {
+    let dataUrl;
+    if (canvas) {
+      dataUrl = canvas.toDataURL("image/png");
+    } else {
+      const response = await fetch(img.src);
+      const blob = await response.blob();
+      dataUrl = URL.createObjectURL(blob);
+    }
+
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = `dan-rentals-qr-${new Date().getTime()}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    if (!canvas) URL.revokeObjectURL(dataUrl);
+    showToast('📥 QR Code downloaded');
+  } catch (err) {
+    console.error('Download failed:', err);
+    showToast('❌ Download failed');
   }
 }
 
@@ -510,48 +556,31 @@ async function createNewRoom() {
     return;
   }
 
-  if (!supabase) {
+  if (!window._supabase) {
     showToast('❌ System Configuration Error: Missing API Credentials.');
     return;
   }
 
   try {
-    // Step 1: Check for existing apartment context if missing
-    let apartmentId = null;
-    const { data: roomsData } = await supabase.from('rooms').select('apartment_id').limit(1);
-    if (roomsData && roomsData.length > 0) {
-      apartmentId = roomsData[0].apartment_id;
-    } else {
-      // Try to fetch from apartments table directly if rooms is empty
-      const { data: aptData } = await supabase.from('apartments').select('id').limit(1);
-      if (aptData && aptData.length > 0) apartmentId = aptData[0].id;
-    }
-
     const roomPayload = {
       room_number: roomNumber,
       room_password: roomPassword,
-      rent: parseInt(rent),
+      rent: parseFloat(rent),
       type: type,
       status: 'vacant',
       updated_at: new Date().toISOString()
     };
 
-    if (apartmentId) {
-      roomPayload.apartment_id = apartmentId;
-    }
+    console.log('Attempting to insert room:', roomPayload);
 
-    console.log('Creating room with payload:', roomPayload);
-
-    const { data, error } = await supabase
+    const { data, error } = await _supabase
       .from('rooms')
       .insert([roomPayload])
       .select();
 
     if (error) {
-      console.error('Supabase Write Error:', error);
-      // Specific check for RLS or missing fields
-      if (error.code === '42P01') throw new Error('Table "rooms" not found.');
-      if (error.code === '23502') throw new Error(`Missing required field: ${error.details || 'Check apartment_id'}`);
+      console.error('Supabase Insert Error:', error);
+      alert(`Room creation failed! Error Code: ${error.code}\nMessage: ${error.message}`);
       throw error;
     }
 
@@ -559,12 +588,47 @@ async function createNewRoom() {
     
     // Refresh UI
     closeModal();
-    await initializeApp(); // Full refresh to ensure consistency
+    await initializeApp();
     
   } catch (error) {
     console.error('Critical Error in createNewRoom:', error);
-    showToast('❌ ' + (error.message || 'Unknown database error'));
+    showToast('❌ Database write failed');
   }
+}
+
+async function downloadRoomReport() {
+  if (!window._supabase) {
+    showToast('❌ System Configuration Error: Missing API Credentials.');
+    return;
+  }
+
+  const { data, error } = await _supabase.from('rooms').select('*').order('room_number');
+  if (error) {
+    alert('Failed to fetch rooms for report: ' + error.message);
+    return;
+  }
+
+  const headers = ['Room Number', 'Type', 'Rent', 'Status', 'Password'];
+  const rows = data.map(r => [
+    r.room_number,
+    r.type,
+    r.rent,
+    r.status,
+    r.room_password
+  ]);
+
+  const csvContent = headers.join(',') + '\n' + rows.map(e => e.join(",")).join("\n");
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", `rooms-inventory-${new Date().toISOString().split('T')[0]}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+  showToast('📥 Rooms inventory downloaded');
 }
 
 async function downloadPaymentReport() {
@@ -580,17 +644,17 @@ async function downloadPaymentReport() {
     p.month
   ]);
 
-  let csvContent = "data:text/csv;charset=utf-8," 
-    + headers.join(",") + "\n"
-    + rows.map(e => e.join(",")).join("\n");
-
-  const encodedUri = encodeURI(csvContent);
+  const csvContent = headers.join(',') + '\n' + rows.map(e => e.join(",")).join("\n");
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  
   const link = document.createElement("a");
-  link.setAttribute("href", encodedUri);
+  link.setAttribute("href", url);
   link.setAttribute("download", `rent-payments-report-${new Date().toISOString().split('T')[0]}.csv`);
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+  URL.revokeObjectURL(url);
   showToast('📥 Report downloaded');
 }
 
@@ -607,7 +671,9 @@ window.openModal = openModal;
 window.closeModal = closeModal;
 window.updateRoomField = updateRoomField;
 window.saveRoomDetails = saveRoomDetails;
+window.downloadQR = downloadQR;
+window.downloadPaymentReport = downloadPaymentReport;
+window.downloadRoomReport = downloadRoomReport;
 window.copyTenantLink = copyTenantLink;
 window.openAddRoomModal = openAddRoomModal;
 window.createNewRoom = createNewRoom;
-window.downloadPaymentReport = downloadPaymentReport;
