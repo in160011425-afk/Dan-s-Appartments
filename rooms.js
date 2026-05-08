@@ -2,16 +2,10 @@
 // SHARED DATA & SUPABASE CONFIG — rooms.js
 // =============================================
 
-// These will be initialized in the HTML or here if hardcoded
-// ---- SECURE INITIALIZATION ----
-if (!window.SUPABASE_URL || window.SUPABASE_URL === "__SUPABASE_URL__") {
-  console.error("Secrets not injected! Check GitHub Actions and Repository Secrets.");
+// Initialize and share the client globally (if not already done in HTML)
+if (!window._supabase && window.supabase && window.SUPABASE_URL) {
+  window._supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
 }
-
-// Initialize and share the client globally
-window._supabase = (window.supabase && window.SUPABASE_URL && window.SUPABASE_URL !== "__SUPABASE_URL__") 
-  ? window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY) 
-  : null;
 
 const _supabase = window._supabase;
 
@@ -36,17 +30,13 @@ async function loadRooms() {
     return [];
   }
   
-  // Map snake_case to camelCase for compatibility with existing UI
+  // Map database columns to application properties
   return data.map(r => ({
     roomNumber: r.room_number,
-    type: r.type,
-    rent: r.rent,
+    rent: r.monthly_rent,
     status: r.status,
-    description: r.description,
-    image: r.image,
-    amenities: r.amenities || [],
-    updatedAt: r.updated_at,
-    roomPassword: r.room_password // Added for tenant verification
+    roomPassword: r.room_password,
+    apartmentId: r.apartment_id
   }));
 }
 
@@ -54,16 +44,11 @@ async function updateRoom(roomNumber, updates) {
   const user = await getCurrentUser();
   if (!user) throw new Error('Unauthorized');
 
-  // Map camelCase back to snake_case
+  // Map application properties back to database columns
   const dbUpdates = {};
   if (updates.status) dbUpdates.status = updates.status;
-  if (updates.rent) dbUpdates.rent = updates.rent;
-  if (updates.type) dbUpdates.type = updates.type;
-  if (updates.description) dbUpdates.description = updates.description;
+  if (updates.rent) dbUpdates.monthly_rent = updates.rent;
   if (updates.roomPassword) dbUpdates.room_password = updates.roomPassword;
-  if (updates.amenities) dbUpdates.amenities = updates.amenities;
-  
-  dbUpdates.updated_at = new Date().toISOString();
 
   const { data, error } = await _supabase
     .from('rooms')
@@ -90,13 +75,9 @@ async function findRoom(roomNumber) {
   
   return {
     roomNumber: data.room_number,
-    type: data.type,
-    rent: data.rent,
+    rent: data.monthly_rent,
     status: data.status,
-    description: data.description,
-    image: data.image,
-    amenities: data.amenities || [],
-    updatedAt: data.updated_at
+    roomPassword: data.room_password
   };
 }
 
@@ -113,13 +94,9 @@ async function verifyRoomAccess(roomNumber, roomPassword) {
   
   return {
     roomNumber: data.room_number,
-    type: data.type,
-    rent: data.rent,
+    rent: data.monthly_rent,
     status: data.status,
-    description: data.description,
-    image: data.image,
-    amenities: data.amenities || [],
-    updatedAt: data.updated_at
+    roomPassword: data.room_password
   };
 }
 
@@ -219,3 +196,4 @@ function timeAgo(dateStr) {
   if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
   return date.toLocaleDateString('en-KE', { day: 'numeric', month: 'short' });
 }
+
