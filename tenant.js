@@ -2,6 +2,8 @@
 // TENANT SEARCH PAGE — tenant.js
 // =============================================
 
+const _supabase = supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+
 document.addEventListener('DOMContentLoaded', async () => {
   await renderVacantRooms();
   
