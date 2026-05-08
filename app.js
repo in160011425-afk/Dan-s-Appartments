@@ -45,6 +45,29 @@ document.addEventListener('DOMContentLoaded', async () => {
   const { data: { session }, error } = await db.auth.getSession();
   if (error) console.error("Session check error:", error);
   
+  window.switchView = function(view) {
+  document.querySelectorAll('.view-content').forEach(v => v.classList.add('hidden'));
+  document.querySelectorAll('.nav-item').forEach(n => {
+    n.classList.remove('active', 'bg-teal-50', 'text-teal-700');
+    n.classList.add('text-gray-400');
+  });
+
+  const targetView = document.getElementById(view + 'View');
+  const targetNav = document.getElementById('nav-' + view);
+  
+  if (targetView) targetView.classList.remove('hidden');
+  if (targetNav) {
+    targetNav.classList.add('active', 'bg-teal-50', 'text-teal-700');
+    targetNav.classList.remove('text-gray-400');
+  }
+
+  if (view === 'rooms') renderRooms();
+  if (view === 'payments') renderPayments();
+  if (view === 'tenants') renderTenants();
+  if (view === 'notices') renderNotices();
+  if (view === 'maintenance') renderMaintenance();
+};
+  
   if (session) {
     document.getElementById('loginModal')?.classList.add('hidden');
     document.querySelector('main')?.classList.remove('hidden');
@@ -600,4 +623,217 @@ window.showToast = function(msg) {
   toast.textContent = msg;
   toast.classList.add('active');
   setTimeout(() => toast.classList.remove('active'), 3000);
+};
+
+// ---- NOTICES ----
+window.renderNotices = async function() {
+  const list = document.getElementById('noticesList');
+  if (!list) return;
+
+  list.innerHTML = `<div class="col-span-full py-12 flex justify-center"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div></div>`;
+
+  const notices = await loadNotices();
+
+  if (notices.length === 0) {
+    list.innerHTML = `<div class="text-center py-12 bg-white rounded-3xl border border-gray-100">
+      <p class="text-gray-400 italic">No notices posted yet.</p>
+    </div>`;
+    return;
+  }
+
+  list.innerHTML = notices.map(n => `
+    <div class="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex gap-4 fade-in">
+      <div class="w-12 h-12 rounded-2xl ${n.priority === 'high' ? 'bg-red-50 text-red-500' : 'bg-teal-50 text-teal-500'} flex items-center justify-center shrink-0">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/></svg>
+      </div>
+      <div class="flex-1">
+        <div class="flex justify-between items-start mb-1">
+          <h4 class="font-bold text-gray-900">${n.title}</h4>
+          <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">${timeAgo(n.created_at)}</span>
+        </div>
+        <p class="text-sm text-gray-500 leading-relaxed">${n.content}</p>
+        <div class="mt-4 flex gap-2">
+          <button class="text-xs font-bold text-red-400 hover:underline" onclick="deleteNotice('${n.id}')">Delete</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+};
+
+window.publishNotice = async function() {
+  const title = document.getElementById('noticeTitle').value.trim();
+  const content = document.getElementById('noticeContent').value.trim();
+  const priority = document.getElementById('noticePriority').checked ? 'high' : 'normal';
+
+  if (!title || !content) return showToast('Please fill all fields');
+
+  const btn = event.target;
+  btn.disabled = true;
+  btn.innerHTML = 'Publishing...';
+
+  const result = await postNotice({ title, content, priority });
+  if (result) {
+    showToast('Notice published successfully');
+    closeModal();
+    renderNotices();
+  } else {
+    showToast('Failed to publish notice');
+    btn.disabled = false;
+    btn.innerHTML = 'Publish to Portal';
+  }
+};
+
+// ---- MAINTENANCE ----
+window.renderMaintenance = async function() {
+  const pending = document.getElementById('pendingMaintenance');
+  const active = document.getElementById('activeMaintenance');
+  const resolved = document.getElementById('resolvedMaintenance');
+  
+  if (!pending) return;
+
+  const requests = await loadMaintenanceRequests();
+
+  const renderCard = (req) => `
+    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-50 fade-in">
+      <div class="flex justify-between items-start mb-2">
+        <span class="text-xs font-black text-teal-600 bg-teal-50 px-2 py-1 rounded-lg">${req.room_number}</span>
+        <span class="text-[10px] font-medium text-gray-400">${timeAgo(req.created_at)}</span>
+      </div>
+      <h4 class="font-bold text-gray-900 mb-1 text-sm">${req.issue}</h4>
+      <p class="text-xs text-gray-500 line-clamp-2 mb-3">${req.description || 'No description provided.'}</p>
+      <div class="flex gap-2">
+        ${req.status === 'pending' ? `<button onclick="setMaintenanceStatus('${req.id}', 'active')" class="flex-1 py-2 rounded-xl bg-teal-600 text-white text-[10px] font-bold">Start Fix</button>` : ''}
+        ${req.status === 'active' ? `<button onclick="setMaintenanceStatus('${req.id}', 'resolved')" class="flex-1 py-2 rounded-xl bg-emerald-500 text-white text-[10px] font-bold">Mark Done</button>` : ''}
+        <button class="px-3 py-2 rounded-xl bg-gray-50 text-gray-400 text-[10px] font-bold">Details</button>
+      </div>
+    </div>
+  `;
+
+  pending.innerHTML = requests.filter(r => r.status === 'pending').map(renderCard).join('') || '<p class="text-xs text-gray-400 text-center py-4 italic">No pending requests</p>';
+  active.innerHTML = requests.filter(r => r.status === 'active').map(renderCard).join('') || '<p class="text-xs text-gray-400 text-center py-4 italic">No active repairs</p>';
+  resolved.innerHTML = requests.filter(r => r.status === 'resolved').map(renderCard).join('') || '<p class="text-xs text-gray-400 text-center py-4 italic">No recent resolutions</p>';
+};
+
+window.setMaintenanceStatus = async function(id, status) {
+  const result = await updateMaintenanceStatus(id, status);
+  if (result) {
+    showToast(`Status updated to ${status}`);
+    renderMaintenance();
+  }
+};
+
+// ---- TENANTS ----
+window.renderTenants = async function() {
+  const list = document.getElementById('tenantsList');
+  if (!list) return;
+
+  list.innerHTML = `<div class="col-span-full py-12 flex justify-center"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div></div>`;
+
+  const tenants = await loadTenants();
+
+  if (tenants.length === 0) {
+    list.innerHTML = `<div class="col-span-full text-center py-12 bg-white rounded-3xl border border-gray-100">
+      <p class="text-gray-400 italic">No tenants registered yet.</p>
+    </div>`;
+    return;
+  }
+
+  list.innerHTML = tenants.map(t => `
+    <div class="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 fade-in">
+      <div class="flex items-center gap-4 mb-4">
+        <div class="w-12 h-12 rounded-full bg-teal-50 flex items-center justify-center text-teal-600 font-bold">
+          ${t.name.split(' ').map(n => n[0]).join('')}
+        </div>
+        <div>
+          <h4 class="font-bold text-gray-900">${t.name}</h4>
+          <p class="text-xs text-gray-400 font-bold uppercase tracking-widest">Unit ${t.room_number}</p>
+        </div>
+      </div>
+      <div class="space-y-3 mb-6">
+        <div class="flex justify-between text-sm">
+          <span class="text-gray-400">Phone</span>
+          <span class="text-gray-900 font-medium">${t.phone || 'N/A'}</span>
+        </div>
+        <div class="flex justify-between text-sm">
+          <span class="text-gray-400">Member Since</span>
+          <span class="text-gray-900 font-medium">${new Date(t.lease_start).toLocaleDateString()}</span>
+        </div>
+        <div class="flex justify-between text-sm">
+          <span class="text-gray-400">Status</span>
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${t.status === 'active' ? 'bg-green-50 text-green-600' : 'bg-amber-50 text-amber-600'}">${t.status}</span>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <button class="flex-1 py-3 rounded-xl bg-gray-50 text-gray-600 text-xs font-bold hover:bg-gray-100 transition-all">Details</button>
+        <button class="flex-1 py-3 rounded-xl bg-gray-50 text-gray-600 text-xs font-bold hover:bg-gray-100 transition-all">Lease</button>
+      </div>
+    </div>
+  `).join('');
+};
+
+window.openNewTenantModal = async function() {
+  const rooms = await loadRooms();
+  const vacantRooms = rooms.filter(r => r.status === 'vacant');
+
+  const modalBody = document.getElementById('modalBody');
+  modalBody.innerHTML = `
+    <div class="p-6">
+      <h3 class="text-xl font-bold text-gray-900 mb-2">Register New Tenant</h3>
+      <p class="text-sm text-gray-500 mb-6">Add a resident to a room and initialize their lease.</p>
+      
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Full Name</label>
+          <input type="text" id="tenantName" placeholder="e.g. John Doe" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-teal-500 text-sm">
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Unit Assignment</label>
+            <select id="tenantUnit" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-teal-500 text-sm">
+              <option value="">Select Room...</option>
+              ${vacantRooms.map(r => `<option value="${r.room_number}">${r.room_number}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Phone Number</label>
+            <input type="tel" id="tenantPhone" placeholder="07..." class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-teal-500 text-sm">
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Lease Start Date</label>
+          <input type="date" id="leaseStart" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-teal-500 text-sm" value="${new Date().toISOString().split('T')[0]}">
+        </div>
+        <button onclick="registerTenantFlow()" class="w-full py-4 bg-teal-600 text-white font-bold rounded-2xl shadow-lg shadow-teal-100 mt-4 transition-all active:scale-95">
+          Complete Registration
+        </button>
+      </div>
+    </div>
+  `;
+  document.getElementById('roomModal').classList.add('active');
+};
+
+window.registerTenantFlow = async function() {
+  const name = document.getElementById('tenantName').value.trim();
+  const room_number = document.getElementById('tenantUnit').value;
+  const phone = document.getElementById('tenantPhone').value.trim();
+  const lease_start = document.getElementById('leaseStart').value;
+
+  if (!name || !room_number) return showToast('Name and Unit are required');
+
+  const btn = event.target;
+  btn.disabled = true;
+  btn.innerHTML = 'Registering...';
+
+  const result = await registerTenant({ name, room_number, phone, lease_start });
+  if (result) {
+    // Update room status to occupied
+    await updateRoom(room_number, { status: 'occupied' });
+    showToast('Tenant registered and room updated!');
+    closeModal();
+    renderTenants();
+  } else {
+    showToast('Failed to register tenant');
+    btn.disabled = false;
+    btn.innerHTML = 'Complete Registration';
+  }
 };
