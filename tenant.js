@@ -63,10 +63,10 @@ window.searchRoom = async function() {
 
 // ---- Build Room Card ----
 function buildRoomCard(room, isSearch) {
-  const whatsappMsg = encodeURIComponent(`Hello, I'm interested in Room ${room.roomNumber} (${room.type}) at Dan's Rentals. Is it still ${room.status}?`);
+  const whatsappMsg = encodeURIComponent(`Hello, I'm interested in Room ${room.roomNumber} at Dan's Rentals. Is it still ${room.status}?`);
   const whatsappUrl = `https://wa.me/${LANDLORD_PHONE}?text=${whatsappMsg}`;
   const callUrl = `tel:+${LANDLORD_PHONE}`;
-  const viewingMsg = encodeURIComponent(`Hi, I would like to schedule a viewing for Room ${room.roomNumber} (${room.type}) at Dan's Rentals. Please let me know available times.`);
+  const viewingMsg = encodeURIComponent(`Hi, I would like to schedule a viewing for Room ${room.roomNumber} at Dan's Rentals. Please let me know available times.`);
   const viewingUrl = `https://wa.me/${LANDLORD_PHONE}?text=${viewingMsg}`;
 
   return `
@@ -76,7 +76,7 @@ function buildRoomCard(room, isSearch) {
         <div class="flex items-start justify-between">
           <div>
             <h3 class="text-2xl font-bold text-gray-900">${formatRoomTitle(room.roomNumber)}</h3>
-            <p class="text-sm text-gray-500 uppercase font-bold tracking-wider">${room.type}</p>
+            <p class="text-sm text-gray-500 uppercase font-bold tracking-wider">Property Details</p>
           </div>
           <span class="badge badge-${room.status}">${room.status}</span>
         </div>
@@ -87,15 +87,10 @@ function buildRoomCard(room, isSearch) {
           <p class="text-3xl font-bold text-teal-800">${formatRent(room.rent)}</p>
         </div>
 
-        <!-- Description -->
+        <!-- Details -->
         <div>
-          <p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Description</p>
-          <p class="text-sm text-gray-600 leading-relaxed">${room.description || 'No description available.'}</p>
-        </div>
-
-        <!-- Amenities -->
-        <div class="flex flex-wrap gap-2">
-          ${(room.amenities || []).map(a => `<span class="amenity-tag">✓ ${a}</span>`).join('')}
+          <p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Details</p>
+          <p class="text-sm text-gray-600 leading-relaxed">Contact management for more information about this unit.</p>
         </div>
 
         <!-- Actions (Read Only) -->
@@ -139,7 +134,7 @@ async function renderVacantRooms() {
           <h4 class="font-bold text-gray-900">${formatRoomTitle(room.roomNumber)}</h4>
           <span class="badge badge-vacant text-[10px]">Vacant</span>
         </div>
-        <p class="text-xs text-gray-500">${room.type}</p>
+        <p class="text-xs text-gray-500">Residential Unit</p>
         <p class="text-sm font-bold text-teal-700">${formatRent(room.rent)}<span class="text-xs font-normal text-gray-400">/mo</span></p>
       </div>
     </div>
