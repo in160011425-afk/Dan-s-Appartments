@@ -6,12 +6,8 @@
   <meta name="description" content="Dan's Rentals — Landlord Dashboard. Manage room vacancies, update statuses, and share availability with tenants.">
   <title>Dan's Rentals — Dashboard</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏢</text></svg>">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script> window.SUPABASE_URL = "__SUPABASE_URL__"; window.SUPABASE_ANON_KEY = "__SUPABASE_ANON_KEY__"; </script>
-  <link rel="stylesheet" href="styles.css">
-  <link rel="manifest" href="manifest.json">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <link rel="stylesheet" href="./styles.css">
+  <link rel="manifest" href="./manifest.json">
 </head>
 <body class="bg-gray-50/50">
 
@@ -167,7 +163,13 @@
   <!-- ===== TOAST ===== -->
   <div id="toast" class="toast"></div>
 
-  <script src="rooms.js"></script>
-  <script src="app.js"></script>
+  <!-- ===== SCRIPTS ===== -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script> window.SUPABASE_URL = "__SUPABASE_URL__"; window.SUPABASE_ANON_KEY = "__SUPABASE_ANON_KEY__"; </script>
+  
+  <script src="./rooms.js"></script>
+  <script src="./app.js"></script>
 </body>
 </html>
