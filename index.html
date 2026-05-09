@@ -158,8 +158,19 @@
       <section id="paymentStats" class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-8"></section>
       
       <!-- Responsive Cards Container -->
-      <div id="paymentTableBody" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        <!-- populated by app.js -->
+      <div id="paymentTableCont" class="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 overflow-x-auto">
+        <table class="w-full text-left min-w-[600px] whitespace-nowrap">
+          <thead>
+            <tr class="text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-50">
+               <th class="pb-4 pl-2">Tenant & Unit</th>
+               <th class="pb-4">Amount</th>
+               <th class="pb-4">Reference</th>
+               <th class="pb-4">Status</th>
+               <th class="pb-4 text-right pr-2">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="paymentTableBody"></tbody>
+        </table>
       </div>
     </div>
 
