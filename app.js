@@ -489,7 +489,7 @@ window.renderPayments = async function() {
   if (!tbody) return;
   
   if (!tenants.length) { 
-    tbody.innerHTML = '<div class="col-span-full py-12 text-center text-gray-400 italic">No tenants registered yet.</div>'; 
+    tbody.innerHTML = '<tr><td colspan="5" class="py-12 text-center text-gray-400 italic">No tenants registered yet.</td></tr>'; 
     return; 
   }
 
@@ -511,37 +511,18 @@ window.renderPayments = async function() {
     if (status === 'pending') { displayStatus = 'Pending'; }
 
     return `
-    <div class="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 flex flex-col gap-4 fade-in hover:shadow-md transition-shadow">
-      <div class="flex justify-between items-start">
-        <div>
-          <h4 class="font-bold text-gray-900">${t.name}</h4>
-          <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">Unit ${t.room_number}</p>
-        </div>
-        <span class="text-[10px] font-black px-3 py-1.5 rounded-full uppercase ${badgeClass}">${displayStatus}</span>
-      </div>
-      
-      <div class="grid grid-cols-2 gap-4 py-3 border-y border-gray-50">
-        <div>
-          <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Amount</p>
-          <p class="font-bold text-sm text-gray-900">KES ${amount.toLocaleString()}</p>
-        </div>
-        <div>
-          <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Reference</p>
-          <p class="font-bold text-sm text-gray-500">${ref}</p>
-        </div>
-      </div>
-      
-      <div class="flex justify-between items-center mt-1">
-        <div>
-          ${payment.receiptImage ? `<button onclick="viewReceipt('${payment.receiptImage}')" class="text-xs font-bold text-teal-600 hover:text-teal-700 uppercase tracking-wider">Receipt</button>` : ''}
-        </div>
-        <div class="flex gap-1.5">
-          <button onclick="setTenantRentStatus('${t.name}', '${t.room_number}', ${amount}, 'verified')" class="text-[10px] font-bold text-green-600 px-3 py-2 bg-green-50 rounded-xl uppercase hover:bg-green-100 active:scale-95 transition-all">Paid</button>
-          <button onclick="setTenantRentStatus('${t.name}', '${t.room_number}', ${amount}, 'rejected')" class="text-[10px] font-bold text-red-500 px-3 py-2 bg-red-50 rounded-xl uppercase hover:bg-red-100 active:scale-95 transition-all">Late</button>
-          <button onclick="setTenantRentStatus('${t.name}', '${t.room_number}', ${amount}, 'pending')" class="text-[10px] font-bold text-amber-500 px-3 py-2 bg-amber-50 rounded-xl uppercase hover:bg-amber-100 active:scale-95 transition-all">Pending</button>
-        </div>
-      </div>
-    </div>`;
+    <tr class="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+      <td class="py-4 pl-2"><p class="font-bold text-sm text-gray-900">${t.name}</p><p class="text-xs text-gray-400">Unit ${t.room_number}</p></td>
+      <td class="py-4 font-bold text-sm">KES ${amount.toLocaleString()}</td>
+      <td class="py-4 text-sm text-gray-500">${ref}</td>
+      <td class="py-4"><span class="text-[10px] font-black px-2 py-1 rounded-full uppercase ${badgeClass}">${displayStatus}</span></td>
+      <td class="py-4 pr-2 text-right space-x-1">
+        ${payment.receiptImage ? `<button onclick="viewReceipt('${payment.receiptImage}')" class="text-xs font-bold text-teal-600 mr-2">Receipt</button>` : ''}
+        <button onclick="setTenantRentStatus('${t.name}', '${t.room_number}', ${amount}, 'verified')" class="text-[10px] font-bold text-green-600 px-2 py-1 bg-green-50 rounded uppercase hover:bg-green-100">Paid</button>
+        <button onclick="setTenantRentStatus('${t.name}', '${t.room_number}', ${amount}, 'rejected')" class="text-[10px] font-bold text-red-500 px-2 py-1 bg-red-50 rounded uppercase hover:bg-red-100">Late</button>
+        <button onclick="setTenantRentStatus('${t.name}', '${t.room_number}', ${amount}, 'pending')" class="text-[10px] font-bold text-amber-500 px-2 py-1 bg-amber-50 rounded uppercase hover:bg-amber-100">Pending</button>
+      </td>
+    </tr>`;
   }).join('');
 };
 
