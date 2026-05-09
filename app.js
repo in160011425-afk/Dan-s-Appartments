@@ -41,10 +41,25 @@ window.handleLogin = async function() {
   const email = document.getElementById('loginEmail')?.value?.trim();
   const password = document.getElementById('loginPassword')?.value;
   const btn = document.getElementById('loginBtn');
-  if (!email || !password) { alert('Email and password required'); return; }
+  const errorEl = document.getElementById('loginError');
+  
+  if (errorEl) errorEl.classList.add('hidden');
+  
+  if (!email || !password) { 
+    if (errorEl) { errorEl.textContent = 'Email and password required'; errorEl.classList.remove('hidden'); }
+    return; 
+  }
+  
   btn.disabled = true; btn.innerHTML = 'Signing in...';
   const { error } = await window._supabase.auth.signInWithPassword({ email, password });
-  if (error) { alert('Login Failed: ' + error.message); btn.disabled = false; btn.innerHTML = 'Access Dashboard'; }
+  
+  if (error) { 
+    if (errorEl) { 
+      errorEl.textContent = 'Invalid login credentials'; 
+      errorEl.classList.remove('hidden'); 
+    }
+    btn.disabled = false; btn.innerHTML = 'Access Dashboard'; 
+  }
 };
 
 window.handleLogout = async function() {
@@ -339,7 +354,76 @@ window.renderTenants = async function() {
         <div class="flex justify-between"><span class="text-gray-400">Phone</span><span class="font-medium">${t.phone||'N/A'}</span></div>
         <div class="flex justify-between"><span class="text-gray-400">Since</span><span class="font-medium">${t.lease_start ? new Date(t.lease_start).toLocaleDateString() : 'N/A'}</span></div>
       </div>
+      <div class="flex justify-end gap-2 border-t border-gray-50 pt-3">
+        <button onclick="openEditTenantModal('${t.id}')" class="text-[10px] font-bold text-gray-400 hover:text-gray-600 uppercase">Edit</button>
+        <button onclick="deleteTenant('${t.id}', '${t.room_number}')" class="text-[10px] font-bold text-red-400 hover:text-red-600 uppercase">Delete</button>
+      </div>
     </div>`).join('');
+};
+
+window.deleteTenant = async function(id, roomNumber) {
+  if (!confirm('Are you sure you want to remove this tenant? This will also mark their room as vacant.')) return;
+  try {
+    const { error } = await window._supabase.from('tenants').delete().eq('id', id);
+    if (error) throw error;
+    
+    // Mark room as vacant
+    await window._supabase.from('rooms').update({ status: 'vacant' }).eq('room_number', roomNumber);
+    
+    showToast('Tenant removed');
+    renderTenants();
+    renderRooms();
+    renderStats();
+  } catch (err) {
+    alert('Failed to delete tenant: ' + err.message);
+  }
+};
+
+window.openEditTenantModal = async function(id) {
+  const tenants = await loadTenants();
+  const t = tenants.find(x => x.id === id);
+  if (!t) return;
+  
+  document.getElementById('modalBody').innerHTML = `
+    <div class="p-6">
+      <h3 class="text-xl font-bold text-gray-900 mb-6">Edit Tenant</h3>
+      <div class="space-y-4">
+        <input type="hidden" id="editTenantId" value="${t.id}">
+        <div>
+          <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Full Name</label>
+          <input type="text" id="editTenantName" value="${t.name}" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Phone Number</label>
+          <input type="text" id="editTenantPhone" value="${t.phone||''}" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none text-sm">
+        </div>
+        <button onclick="updateTenantFlow()" class="w-full py-4 bg-teal-600 text-white font-bold rounded-2xl">Save Changes</button>
+      </div>
+    </div>`;
+  document.getElementById('roomModal').classList.add('active');
+};
+
+window.updateTenantFlow = async function() {
+  const id = document.getElementById('editTenantId').value;
+  const name = document.getElementById('editTenantName').value.trim();
+  const phone = document.getElementById('editTenantPhone').value.trim();
+  
+  if (!name) { alert('Name is required'); return; }
+  
+  const btn = event.target; 
+  btn.disabled = true; btn.innerHTML = 'Saving...';
+  
+  try {
+    const { error } = await window._supabase.from('tenants').update({ name, phone }).eq('id', id);
+    if (error) throw error;
+    
+    showToast('Tenant updated');
+    closeModal();
+    renderTenants();
+  } catch (err) {
+    alert('Failed to update tenant: ' + err.message);
+    btn.disabled = false; btn.innerHTML = 'Save Changes';
+  }
 };
 
 window.openNewTenantModal = async function() {
@@ -398,21 +482,130 @@ window.renderPaymentStats = async function() {
 };
 
 window.renderPayments = async function() {
+  const tenants = await loadTenants();
   const payments = await loadPayments();
+  const rooms = await loadRooms();
   const tbody = document.getElementById('paymentTableBody');
   if (!tbody) return;
-  if (!payments.length) { tbody.innerHTML = '<tr><td colspan="5" class="py-12 text-center text-gray-400 italic">No payments yet.</td></tr>'; return; }
-  tbody.innerHTML = payments.map(p => `
+  
+  if (!tenants.length) { 
+    tbody.innerHTML = '<tr><td colspan="5" class="py-12 text-center text-gray-400 italic">No tenants registered yet.</td></tr>'; 
+    return; 
+  }
+
+  tbody.innerHTML = tenants.map(t => {
+    // Find the tenant's payment record (most recent one or matching their room)
+    const payment = payments.find(p => p.unitNumber === t.room_number) || {};
+    const room = rooms.find(r => r.roomNumber === t.room_number) || {};
+    
+    // Status can be from payment record, otherwise default to pending
+    const status = payment.status || 'pending';
+    const amount = payment.amount || room.rent || 0;
+    const ref = payment.transactionCode || 'Manual';
+
+    // Badge styling based on status (paid, late, pending)
+    // Treating 'verified' as 'paid' for backward compatibility
+    let badgeClass = 'bg-amber-100 text-amber-600';
+    let displayStatus = status;
+    if (status === 'paid' || status === 'verified') { badgeClass = 'bg-green-100 text-green-600'; displayStatus = 'Paid'; }
+    if (status === 'late' || status === 'rejected') { badgeClass = 'bg-red-100 text-red-600'; displayStatus = 'Late'; }
+    if (status === 'pending') { displayStatus = 'Pending'; }
+
+    return `
     <tr class="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-      <td class="py-4 pl-2"><p class="font-bold text-sm text-gray-900">${p.tenantName||'Unknown'}</p><p class="text-xs text-gray-400">Unit ${p.unitNumber||'N/A'}</p></td>
-      <td class="py-4 font-bold text-sm">KES ${(p.amount||0).toLocaleString()}</td>
-      <td class="py-4 text-sm text-gray-500">${p.transactionCode||'-'}</td>
-      <td class="py-4"><span class="text-[10px] font-black px-2 py-1 rounded-full uppercase ${p.status==='verified'?'bg-green-100 text-green-600':p.status==='rejected'?'bg-red-100 text-red-600':'bg-amber-100 text-amber-600'}">${p.status||'pending'}</span></td>
-      <td class="py-4 pr-2 text-right">
-        ${p.receiptImage?`<button onclick="viewReceipt('${p.receiptImage}')" class="text-xs font-bold text-teal-600 mr-2">Receipt</button>`:''}
-        ${p.status==='pending'?`<button onclick="handlePaymentAction('${p.id}','verified')" class="text-xs font-bold text-green-600 mr-1">Verify</button><button onclick="handlePaymentAction('${p.id}','rejected')" class="text-xs font-bold text-red-500">Reject</button>`:''}
+      <td class="py-4 pl-2"><p class="font-bold text-sm text-gray-900">${t.name}</p><p class="text-xs text-gray-400">Unit ${t.room_number}</p></td>
+      <td class="py-4 font-bold text-sm">KES ${amount.toLocaleString()}</td>
+      <td class="py-4 text-sm text-gray-500">${ref}</td>
+      <td class="py-4"><span class="text-[10px] font-black px-2 py-1 rounded-full uppercase ${badgeClass}">${displayStatus}</span></td>
+      <td class="py-4 pr-2 text-right space-x-1">
+        ${payment.receiptImage ? `<button onclick="viewReceipt('${payment.receiptImage}')" class="text-xs font-bold text-teal-600 mr-2">Receipt</button>` : ''}
+        <button onclick="setTenantRentStatus('${t.name}', '${t.room_number}', ${amount}, 'verified')" class="text-[10px] font-bold text-green-600 px-2 py-1 bg-green-50 rounded uppercase hover:bg-green-100">Paid</button>
+        <button onclick="setTenantRentStatus('${t.name}', '${t.room_number}', ${amount}, 'rejected')" class="text-[10px] font-bold text-red-500 px-2 py-1 bg-red-50 rounded uppercase hover:bg-red-100">Late</button>
+        <button onclick="setTenantRentStatus('${t.name}', '${t.room_number}', ${amount}, 'pending')" class="text-[10px] font-bold text-amber-500 px-2 py-1 bg-amber-50 rounded uppercase hover:bg-amber-100">Pending</button>
       </td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
+};
+
+window.setTenantRentStatus = async function(tenantName, roomNumber, amount, status) {
+  try {
+    // Check if a payment record already exists for this tenant/room
+    const payments = await loadPayments();
+    const existingPayment = payments.find(p => p.unitNumber === roomNumber);
+
+    if (existingPayment) {
+      // Update existing
+      const { error } = await window._supabase.from('payments').update({ status }).eq('id', existingPayment.id);
+      if (error) throw error;
+    } else {
+      // Create new
+      const month = new Date().toLocaleString('en-US', { month: 'short', year: 'numeric' });
+      const { error } = await window._supabase.from('payments').insert([{
+        tenant_name: tenantName,
+        room_number: roomNumber,
+        amount: amount,
+        status: status,
+        month: month,
+        transaction_code: 'Manual'
+      }]);
+      if (error) throw error;
+    }
+    showToast('Status updated to ' + status);
+    renderPaymentStats();
+    renderPayments();
+  } catch (err) {
+    alert('Failed to update status: ' + err.message);
+  }
+};
+
+window.downloadRentRecords = async function() {
+  try {
+    const tenants = await loadTenants();
+    const payments = await loadPayments();
+    const rooms = await loadRooms();
+    
+    let csvContent = "data:text/csv;charset=utf-8,";
+    csvContent += "Tenant Name,Unit Number,Phone,Rent Amount,Status,Reference,Date\n";
+    
+    tenants.forEach(t => {
+      const payment = payments.find(p => p.unitNumber === t.room_number) || {};
+      const room = rooms.find(r => r.roomNumber === t.room_number) || {};
+      
+      const amount = payment.amount || room.rent || 0;
+      let status = payment.status || 'pending';
+      if (status === 'verified') status = 'paid';
+      if (status === 'rejected') status = 'late';
+      
+      const ref = payment.transactionCode || 'Manual';
+      const date = payment.date ? new Date(payment.date).toLocaleDateString() : new Date().toLocaleDateString();
+      const phone = t.phone || 'N/A';
+      
+      const row = [
+        `"${t.name}"`, 
+        `"${t.room_number}"`, 
+        `"${phone}"`,
+        amount, 
+        `"${status.toUpperCase()}"`, 
+        `"${ref}"`, 
+        `"${date}"`
+      ].join(",");
+      
+      csvContent += row + "\n";
+    });
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    const month = new Date().toLocaleString('en-US', { month: 'short', year: 'numeric' }).replace(' ', '_');
+    link.setAttribute("download", `rent_records_${month}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    showToast('Records downloaded');
+  } catch (err) {
+    alert('Failed to download records: ' + err.message);
+  }
 };
 
 window.filterPayments = function() { renderPayments(); };
