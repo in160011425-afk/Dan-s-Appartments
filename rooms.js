@@ -10,7 +10,8 @@ if (!window._supabase && window.supabase && window.SUPABASE_URL) {
 const _supabase = window._supabase;
 
 
-const LANDLORD_PHONE = '254712345678';
+window.LANDLORD_PHONE = '254717056096';
+const LANDLORD_PHONE = window.LANDLORD_PHONE;
 
 // ---- AUTH HELPER ----
 async function getCurrentUser() {
@@ -102,11 +103,13 @@ async function verifyRoomAccess(roomNumber, roomPassword) {
 
 async function getRoomStats() {
   const rooms = await loadRooms();
+  const getCount = (status) => rooms.filter(r => r.status?.toLowerCase() === status.toLowerCase()).length;
+  
   return {
     total: rooms.length,
-    vacant: rooms.filter(r => r.status === 'vacant').length,
-    occupied: rooms.filter(r => r.status === 'occupied').length,
-    reserved: rooms.filter(r => r.status === 'reserved').length
+    vacant: getCount('vacant'),
+    occupied: getCount('occupied'),
+    reserved: getCount('reserved')
   };
 }
 
@@ -125,7 +128,7 @@ async function loadPayments() {
   return data.map(p => ({
     id: p.id,
     tenantName: p.tenant_name,
-    unitNumber: p.unit_number,
+    unitNumber: p.room_number || p.unit_number,
     amount: p.amount,
     phone: p.phone,
     transactionCode: p.transaction_code,
@@ -155,7 +158,7 @@ async function updatePaymentStatus(paymentId, status) {
   return {
     id: data.id,
     tenantName: data.tenant_name,
-    unitNumber: data.unit_number,
+    unitNumber: data.room_number || data.unit_number,
     status: data.status
   };
 }
