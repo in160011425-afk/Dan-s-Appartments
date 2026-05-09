@@ -2,17 +2,21 @@
 // TENANT SEARCH PAGE — tenant.js
 // =============================================
 
-const db = window._supabase;
+let db = window._supabase;
 
-if (!db) {
-  console.error("Supabase client (db) not initialized! Check rooms.js and Secrets.");
+// Ensure DB is ready even if rooms.js loads slightly after
+function getDB() {
+  if (!db) db = window._supabase;
+  return db;
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  if (!db) return;
+  // Wait briefly to ensure supabase client is ready
+  await new Promise(r => setTimeout(r, 150));
+  db = window._supabase;
+  if (!db) { console.error('Supabase not ready'); return; }
   await renderVacantRooms();
   
-  // Allow Enter key to search
   document.getElementById('searchInput').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') document.getElementById('passwordInput').focus();
   });
@@ -192,9 +196,19 @@ window.loadTenantNotices = async function() {
       ` : ''}
       <h5 class="font-bold text-gray-900 text-sm mb-1">${n.title}</h5>
       <p class="text-xs text-gray-600 leading-relaxed">${n.content}</p>
-      <p class="text-[9px] text-gray-400 mt-2 font-medium uppercase tracking-widest">${timeAgo(n.created_at)}</p>
+      <div class="flex justify-between items-center mt-2">
+        <p class="text-[9px] text-gray-400 font-medium uppercase tracking-widest">${timeAgo(n.created_at)}</p>
+        <button onclick="deleteTenantNotice('${n.id}')" class="text-[9px] font-bold text-red-400 hover:text-red-600 transition-colors uppercase tracking-widest">Remove</button>
+      </div>
     </div>
   `).join('');
+};
+
+window.deleteTenantNotice = async function(id) {
+  if (!confirm('Remove this notice?')) return;
+  const { error } = await getDB().from('notices').delete().eq('id', id);
+  if (!error) { alert('Notice removed'); loadTenantNotices(); }
+  else alert('Failed: ' + error.message);
 };
 
 window.loadTenantFixHistory = async function(roomNumber) {
@@ -215,9 +229,19 @@ window.loadTenantFixHistory = async function(roomNumber) {
         <h6 class="font-bold text-gray-900 text-xs">${r.issue}</h6>
         <span class="text-[9px] px-2 py-0.5 rounded-full font-black uppercase ${r.status === 'resolved' ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'}">${r.status}</span>
       </div>
-      <p class="text-[10px] text-gray-500">${timeAgo(r.created_at)}</p>
+      <div class="flex justify-between items-center mt-1">
+        <p class="text-[10px] text-gray-400">${timeAgo(r.created_at)}</p>
+        <button onclick="deleteTenantFix('${r.id}', '${r.room_number}')" class="text-[9px] font-bold text-red-400 hover:text-red-600 uppercase">Delete</button>
+      </div>
     </div>
   `).join('');
+};
+
+window.deleteTenantFix = async function(id, roomNumber) {
+  if (!confirm('Delete this request?')) return;
+  const { error } = await getDB().from('maintenance_requests').delete().eq('id', id);
+  if (!error) { alert('Record deleted'); loadTenantFixHistory(roomNumber); }
+  else alert('Failed: ' + error.message);
 };
 
 window.submitMaintenanceRequestFlow = async function(roomNumber) {
@@ -246,7 +270,7 @@ window.submitMaintenanceRequestFlow = async function(roomNumber) {
 // ---- Vacant Rooms List ----
 async function renderVacantRooms() {
   const rooms = await loadRooms();
-  const vacant = (rooms || []).filter(r => r.status === 'vacant');
+  const vacant = (rooms || []).filter(r => (r.status || '').toLowerCase() === 'vacant');
   const list = document.getElementById('vacantList');
   const noVacant = document.getElementById('noVacant');
 
