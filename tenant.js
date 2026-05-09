@@ -196,19 +196,11 @@ window.loadTenantNotices = async function() {
       ` : ''}
       <h5 class="font-bold text-gray-900 text-sm mb-1">${n.title}</h5>
       <p class="text-xs text-gray-600 leading-relaxed">${n.content}</p>
-      <div class="flex justify-between items-center mt-2">
+      <div class="mt-2">
         <p class="text-[9px] text-gray-400 font-medium uppercase tracking-widest">${timeAgo(n.created_at)}</p>
-        <button onclick="deleteTenantNotice('${n.id}')" class="text-[9px] font-bold text-red-400 hover:text-red-600 transition-colors uppercase tracking-widest">Remove</button>
       </div>
     </div>
   `).join('');
-};
-
-window.deleteTenantNotice = async function(id) {
-  if (!confirm('Remove this notice?')) return;
-  const { error } = await getDB().from('notices').delete().eq('id', id);
-  if (!error) { alert('Notice removed'); loadTenantNotices(); }
-  else alert('Failed: ' + error.message);
 };
 
 window.loadTenantFixHistory = async function(roomNumber) {
