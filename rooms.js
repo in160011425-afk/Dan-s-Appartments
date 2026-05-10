@@ -1,273 +1,349 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
-  <meta name="description" content="Dan's Rentals — Landlord Dashboard. Manage room vacancies, update statuses, and share availability with tenants.">
-  <title>Dan's Rentals — Dashboard</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏢</text></svg>">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script>
-    window.SUPABASE_URL = "https://jmpftxayrlnnaiajwshe.supabase.co"; 
-    window.SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImptcGZ0eGF5cmxubmFpYWp3c2hlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxODYxMDcsImV4cCI6MjA5Mzc2MjEwN30.9LxsA1GOAx9HkUqAQRMbHZKyOvefnzfg_RpMv4kjx4I";
-    
-    // Initialize immediately
-    if (window.supabase) {
-      window._supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
-    }
-  </script>
-  <link rel="stylesheet" href="./styles.css?v=3">
-  <link rel="manifest" href="./manifest.json">
-</head>
-<body class="bg-gray-50/50">
+// =============================================
+// SHARED DATA & SUPABASE CONFIG — rooms.js
+// =============================================
 
-  <!-- ===== LANDLORD LOGIN MODAL ===== -->
-  <div id="loginModal" class="hidden modal-overlay items-center justify-center p-4">
-    <div class="bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl fade-in">
-      <div class="w-16 h-16 rounded-2xl bg-teal-500 flex items-center justify-center text-white font-bold text-2xl mx-auto mb-6 shadow-lg">D</div>
-      <h2 class="text-2xl font-bold text-center text-gray-900 mb-2">Landlord Portal</h2>
-      <p class="text-center text-gray-500 mb-6">Please sign in to manage your property.</p>
-      
-      <div id="loginError" class="hidden bg-red-50 text-red-500 text-sm font-bold text-center p-3 rounded-xl mb-6"></div>
+// Initialize and share the client globally (if not already done in HTML)
+if (!window._supabase && window.supabase && window.SUPABASE_URL) {
+  window._supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+}
 
-      
-      <div class="space-y-4">
-        <div>
-          <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 ml-1">Email Address</label>
-          <input type="email" id="loginEmail" placeholder="landlord@example.com" class="w-full px-5 py-4 rounded-2xl bg-gray-50 border-none focus:ring-2 focus:ring-teal-500 text-sm transition-all">
-        </div>
-        <div>
-          <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 ml-1">Password</label>
-          <input type="password" id="loginPassword" placeholder="••••••••" class="w-full px-5 py-4 rounded-2xl bg-gray-50 border-none focus:ring-2 focus:ring-teal-500 text-sm transition-all">
-        </div>
-        <button onclick="handleLogin()" id="loginBtn" class="w-full py-4 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-2xl shadow-lg shadow-teal-200 transition-all transform active:scale-95 mt-4">
-          Access Dashboard
-        </button>
-      </div>
-    </div>
-  </div>
+const _supabase = window._supabase;
 
-  <!-- ===== NAVIGATION ===== -->
-  <nav class="fixed bottom-0 left-0 right-0 z-[60] bg-white border-t border-gray-100 lg:top-0 lg:bottom-auto lg:left-0 lg:w-64 lg:h-full lg:border-r lg:border-t-0 p-2 lg:p-6 flex lg:flex-col justify-around lg:justify-start gap-2 shadow-2xl lg:shadow-none">
-    <div class="hidden lg:flex items-center gap-3 mb-10 px-2">
-      <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center text-white font-bold shadow-lg">D</div>
-      <h1 class="text-xl font-bold text-gray-900 leading-tight">Dan's Rentals</h1>
-    </div>
-    
-    <button onclick="switchView('rooms')" id="nav-rooms" class="nav-item active flex-1 lg:flex-none flex flex-col lg:flex-row items-center gap-1 lg:gap-3 p-3 rounded-2xl transition-all duration-300">
-      <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
-      <span class="text-[10px] lg:text-sm font-bold uppercase tracking-wider">Rooms</span>
-    </button>
-    
-    <button onclick="switchView('payments')" id="nav-payments" class="nav-item flex-1 lg:flex-none flex flex-col lg:flex-row items-center gap-1 lg:gap-3 p-3 rounded-2xl transition-all duration-300 text-gray-400">
-      <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-      <span class="text-[10px] lg:text-sm font-bold uppercase tracking-wider">Rent</span>
-    </button>
 
-    <button onclick="switchView('tenants')" id="nav-tenants" class="nav-item flex-1 lg:flex-none flex flex-col lg:flex-row items-center gap-1 lg:gap-3 p-3 rounded-2xl transition-all duration-300 text-gray-400">
-      <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
-      <span class="text-[10px] lg:text-sm font-bold uppercase tracking-wider">Tenants</span>
-    </button>
+window.LANDLORD_PHONE = '254717056096';
+const LANDLORD_PHONE = window.LANDLORD_PHONE;
 
-    <button onclick="switchView('notices')" id="nav-notices" class="nav-item flex-1 lg:flex-none flex flex-col lg:flex-row items-center gap-1 lg:gap-3 p-3 rounded-2xl transition-all duration-300 text-gray-400">
-      <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/></svg>
-      <span class="text-[10px] lg:text-sm font-bold uppercase tracking-wider">Notices</span>
-    </button>
+// ---- GLOBAL STATE CACHE ----
+window.AppState = {
+  rooms: null,
+  payments: null,
+  tenants: null,
+  notices: null,
+  maintenance: null
+};
 
-    <button onclick="switchView('maintenance')" id="nav-maintenance" class="nav-item flex-1 lg:flex-none flex flex-col lg:flex-row items-center gap-1 lg:gap-3 p-3 rounded-2xl transition-all duration-300 text-gray-400">
-      <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-      <span class="text-[10px] lg:text-sm font-bold uppercase tracking-wider">Fixes</span>
-    </button>
+window.clearCache = function(key) {
+  if (key) window.AppState[key] = null;
+  else {
+    window.AppState.rooms = null;
+    window.AppState.payments = null;
+    window.AppState.tenants = null;
+    window.AppState.notices = null;
+    window.AppState.maintenance = null;
+  }
+};
 
-    <div class="hidden lg:block mt-auto pt-6 border-t border-gray-100">
-      <button onclick="handleLogout()" class="w-full flex items-center gap-3 p-3 rounded-2xl text-red-500 hover:bg-red-50 transition-all font-bold text-sm">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
-        Sign Out
-      </button>
-    </div>
-  </nav>
+// ---- AUTH HELPER ----
+async function getCurrentUser() {
+  const { data: { session } } = await _supabase.auth.getSession();
+  return session?.user || null;
+}
 
-  <main class="lg:ml-64 pb-20 lg:pb-10 min-h-screen transition-all duration-500">
-    <!-- ===== HEADER (MOBILE) ===== -->
-    <header class="lg:hidden sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100 px-4 py-3 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <div class="w-8 h-8 rounded-lg bg-teal-500 flex items-center justify-center text-white font-bold text-sm">D</div>
-        <h1 class="text-base font-bold">Dan's Rentals</h1>
-      </div>
-      <button onclick="handleLogout()" class="flex items-center gap-2 bg-red-50 text-red-600 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tighter border border-red-100">
-        Sign Out
-      </button>
-    </header>
-
-    <!-- ===== ROOMS VIEW ===== -->
-    <div id="roomsView" class="view-content fade-in px-4 pt-6">
-      <section id="statsSection" class="flex gap-3 overflow-x-auto pb-2 mb-6 scrollbar-hide"></section>
-      
-      <div class="flex flex-wrap items-center justify-between gap-4 mb-8">
-        <div id="filterContainer" class="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
-          <button onclick="setFilter('all')" class="filter-btn active" data-filter="all">All</button>
-          <button onclick="setFilter('vacant')" class="filter-btn" data-filter="vacant">
-            <span class="w-2 h-2 rounded-full bg-red-500"></span> Vacant
-          </button>
-          <button onclick="setFilter('occupied')" class="filter-btn" data-filter="occupied">
-            <span class="w-2 h-2 rounded-full bg-green-500"></span> Occupied
-          </button>
-          <button onclick="setFilter('reserved')" class="filter-btn" data-filter="reserved">
-            <span class="w-2 h-2 rounded-full bg-amber-500"></span> Reserved
-          </button>
-        </div>
-        <button onclick="openAddRoomModal()" class="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-2xl shadow-lg shadow-teal-100 transition-all active:scale-95 flex items-center gap-2">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
-          New Room
-        </button>
-      </div>
-
-      <div id="roomsList" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"></div>
-
-      <div id="noRooms" class="hidden text-center py-20 bg-white rounded-3xl border border-dashed border-gray-200">
-        <p class="text-gray-400">No rooms found matching this filter.</p>
-      </div>
-
-      <section class="mt-12 mb-8 bg-gradient-to-br from-teal-900 to-teal-800 rounded-[2rem] p-8 text-white relative overflow-hidden shadow-2xl">
-        <div class="absolute -right-10 -bottom-10 w-64 h-64 bg-white/5 rounded-full blur-3xl"></div>
-        <div class="relative z-10 text-center lg:text-left">
-          <p class="text-teal-300 font-bold uppercase tracking-widest text-[10px] mb-2">Share With Tenants</p>
-          <h2 class="text-3xl font-black mb-6 leading-tight">Scan to Check Availability</h2>
-          <div id="qrcode" class="bg-white p-4 rounded-3xl inline-block shadow-2xl mb-6 mx-auto lg:mx-0"></div>
-          <p class="text-sm opacity-70 mb-4 max-w-xs mx-auto lg:mx-0">Tenants can scan this QR code to check room availability instantly.</p>
-          <div class="flex flex-wrap justify-center lg:justify-start gap-2">
-            <button onclick="downloadQR()" class="btn-action bg-white/20 hover:bg-white/30 backdrop-blur text-white border border-white/30">Download QR</button>
-            <button onclick="copyTenantLink()" class="btn-action bg-white/20 hover:bg-white/30 backdrop-blur text-white border border-white/30">Copy Link</button>
-          </div>
-        </div>
-      </section>
-    </div>
-
-    <!-- ===== PAYMENTS VIEW ===== -->
-    <div id="paymentsView" class="view-content hidden fade-in px-4 pt-6 lg:px-10">
-      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-        <div>
-          <h2 class="text-2xl font-bold text-gray-900 mb-1">Rent Payments</h2>
-          <p class="text-sm text-gray-500">Track and verify tenant payments</p>
-        </div>
-        <button onclick="downloadRentRecords()" class="w-full sm:w-auto px-5 py-3 bg-gray-900 hover:bg-gray-800 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 text-sm">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-          Download Records
-        </button>
-      </div>
-      <section id="paymentStats" class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-8"></section>
-      
-      <!-- Responsive Cards Container -->
-      <div id="paymentTableCont" class="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 overflow-x-auto">
-        <table class="w-full text-left min-w-[600px] whitespace-nowrap">
-          <thead>
-            <tr class="text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-50">
-               <th class="pb-4 pl-2">Tenant & Unit</th>
-               <th class="pb-4">Amount</th>
-               <th class="pb-4">Reference</th>
-               <th class="pb-4">Status</th>
-               <th class="pb-4 text-right pr-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody id="paymentTableBody"></tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- ===== TENANTS VIEW ===== -->
-    <div id="tenantsView" class="view-content hidden fade-in px-4 pt-6 lg:px-10">
-      <div class="flex justify-between items-center mb-6">
-        <div>
-          <h2 class="text-2xl font-bold text-gray-900 mb-1">Active Tenants</h2>
-          <p class="text-sm text-gray-500">Manage current residents and lease information</p>
-        </div>
-        <button onclick="openNewTenantModal()" class="btn-action bg-teal-600 text-white hover:bg-teal-700 shadow-lg shadow-teal-100">
-          + Register Tenant
-        </button>
-      </div>
-      <div id="tenantsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
-    </div>
-
-    <!-- ===== NOTICES VIEW ===== -->
-    <div id="noticesView" class="view-content hidden fade-in px-4 pt-6 lg:px-10">
-      <div class="flex justify-between items-center mb-6">
-        <div>
-          <h2 class="text-2xl font-bold text-gray-900 mb-1">Notice Board</h2>
-          <p class="text-sm text-gray-500">Publish updates and alerts for all tenants</p>
-        </div>
-        <button onclick="openNoticeModal()" class="btn-action bg-teal-600 text-white hover:bg-teal-700 shadow-lg shadow-teal-100">
-          + Post Notice
-        </button>
-      </div>
-      <div id="noticesList" class="space-y-4 max-w-4xl"></div>
-    </div>
-
-    <!-- ===== MAINTENANCE VIEW ===== -->
-    <div id="maintenanceView" class="view-content hidden fade-in px-4 pt-6 lg:px-10">
-      <h2 class="text-2xl font-bold text-gray-900 mb-1">Fixes & Maintenance</h2>
-      <p class="text-sm text-gray-500 mb-8">Manage repair requests and resolution status</p>
-      
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div class="space-y-4">
-          <h4 class="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full bg-amber-500"></span> Pending
-          </h4>
-          <div id="pendingFixes" class="space-y-4"></div>
-        </div>
-        <div class="space-y-4">
-          <h4 class="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full bg-blue-500"></span> In Progress
-          </h4>
-          <div id="activeFixes" class="space-y-4"></div>
-        </div>
-        <div class="space-y-4">
-          <h4 class="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full bg-green-500"></span> Resolved
-          </h4>
-          <div id="resolvedFixes" class="space-y-4"></div>
-        </div>
-      </div>
-    </div>
-  </main>
-
-  <!-- ===== MODALS ===== -->
-  <div id="roomModal" class="modal-overlay" onclick="if(event.target===this)closeModal()">
-    <div class="modal-content">
-      <div class="modal-handle"></div>
-      <div id="modalBody"></div>
-    </div>
-  </div>
-
-  <div id="receiptModal" class="modal-overlay" onclick="if(event.target===this)closeReceiptModal()">
-    <div class="modal-content !max-w-md">
-      <div class="modal-handle"></div>
-      <div class="p-6">
-        <h3 class="text-lg font-bold mb-4">M-Pesa Receipt</h3>
-        <img id="receiptPreview" src="" alt="Receipt" class="w-full rounded-2xl shadow-lg border border-gray-100">
-        <button onclick="closeReceiptModal()" class="w-full mt-6 py-4 rounded-2xl bg-gray-100 text-gray-600 font-bold hover:bg-gray-200 transition-all">Close Preview</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ===== TOAST ===== -->
-  <div id="toast" class="toast"></div>
-
-  <!-- ===== SCRIPTS ===== -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+// ---- ROOMS DATA ----
+async function loadRooms(forceRefresh = false) {
+  if (!forceRefresh && window.AppState.rooms) return window.AppState.rooms;
+  const { data, error } = await _supabase
+    .from('rooms')
+    .select('*')
+    .order('room_number', { ascending: true });
   
-  <script src="./rooms.js?v=7"></script>
-  <script src="./tenant.js?v=7"></script>
-  <script src="./app.js?v=7"></script>
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js')
-          .then(reg => console.log('Service Worker registered', reg))
-          .catch(err => console.error('Service Worker registration failed', err));
-      });
+  if (error) {
+    console.error('Error loading rooms:', error);
+    alert('Failed to load rooms: ' + error.message);
+    return [];
+  }
+  
+  // Map database columns to application properties
+  window.AppState.rooms = data.map(r => ({
+    roomNumber: r.room_number,
+    rent: r.monthly_rent,
+    status: r.status,
+    roomPassword: r.room_password,
+    apartmentId: r.apartment_id
+  }));
+  return window.AppState.rooms;
+}
+
+async function updateRoom(roomNumber, updates) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error('Unauthorized');
+
+  // Map application properties back to database columns
+  const dbUpdates = {};
+  if (updates.status) dbUpdates.status = updates.status;
+  if (updates.rent) dbUpdates.monthly_rent = updates.rent;
+  if (updates.roomPassword) dbUpdates.room_password = updates.roomPassword;
+  if (updates.newRoomNumber && updates.newRoomNumber !== roomNumber) {
+    dbUpdates.room_number = updates.newRoomNumber;
+  }
+
+  const { data, error } = await _supabase
+    .from('rooms')
+    .update(dbUpdates)
+    .eq('room_number', roomNumber)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error updating room:', error);
+    if (error.code === '23503') {
+      alert('Cannot change room number because there are existing tenants or records tied to this room. Remove them first.');
+    } else {
+      alert('Failed to update room: ' + error.message);
     }
-  </script>
-</body>
-</html>
+    return null;
+  }
+  window.clearCache('rooms');
+  return data;
+}
+
+async function findRoom(roomNumber) {
+  const { data, error } = await _supabase
+    .from('rooms')
+    .select('*')
+    .eq('room_number', roomNumber.trim())
+    .single();
+
+  if (error || !data) return null;
+  
+  return {
+    roomNumber: data.room_number,
+    rent: data.monthly_rent,
+    status: data.status,
+    roomPassword: data.room_password
+  };
+}
+
+// Secure lookup for Tenant Portal
+async function verifyRoomAccess(roomNumber, roomPassword) {
+  const { data, error } = await _supabase
+    .from('rooms')
+    .select('*')
+    .eq('room_number', roomNumber.trim())
+    .eq('room_password', roomPassword.trim())
+    .single();
+
+  if (error || !data) return null;
+  
+  return {
+    roomNumber: data.room_number,
+    rent: data.monthly_rent,
+    status: data.status,
+    roomPassword: data.room_password
+  };
+}
+
+async function getRoomStats() {
+  const rooms = await loadRooms();
+  const getCount = (status) => rooms.filter(r => r.status?.toLowerCase() === status.toLowerCase()).length;
+  
+  return {
+    total: rooms.length,
+    vacant: getCount('vacant'),
+    occupied: getCount('occupied'),
+    reserved: getCount('reserved')
+  };
+}
+
+// ---- PAYMENTS DATA ----
+async function loadPayments(forceRefresh = false) {
+  if (!forceRefresh && window.AppState.payments) return window.AppState.payments;
+  const { data, error } = await _supabase
+    .from('payments')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error loading payments:', error);
+    alert('Failed to load payments: ' + error.message);
+    return [];
+  }
+
+  window.AppState.payments = data.map(p => ({
+    id: p.id,
+    tenantName: p.tenant_name,
+    unitNumber: p.room_number || p.unit_number,
+    amount: p.amount,
+    phone: p.phone,
+    transactionCode: p.transaction_code,
+    date: p.created_at,
+    status: p.status,
+    month: p.month,
+    receiptImage: p.receipt_image
+  }));
+  return window.AppState.payments;
+}
+
+async function updatePaymentStatus(paymentId, status) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error('Unauthorized');
+
+  const { data, error } = await _supabase
+    .from('payments')
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq('id', paymentId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error updating payment:', error);
+    return null;
+  }
+  
+  window.clearCache('payments');
+  
+  return {
+    id: data.id,
+    tenantName: data.tenant_name,
+    unitNumber: data.room_number || data.unit_number,
+    status: data.status
+  };
+}
+
+async function getPaymentStats() {
+  const payments = await loadPayments();
+  const rooms = await loadRooms();
+  const currentMonth = "May 2026";
+  const monthlyPayments = payments.filter(p => p.month === currentMonth);
+
+  const verifiedCount = monthlyPayments.filter(p => p.status === 'verified').length;
+
+  return {
+    totalCollected: monthlyPayments.filter(p => p.status === 'verified').reduce((sum, p) => sum + p.amount, 0),
+    paidTenants: verifiedCount,
+    unpaidTenants: Math.max(0, rooms.length - verifiedCount),
+    latePayments: monthlyPayments.filter(p => p.status === 'pending' && p.date && new Date(p.date).getDate() > 5).length,
+    pendingVerifications: payments.filter(p => p.status === 'pending').length
+  };
+}
+
+// ---- TENANTS ----
+async function loadTenants(forceRefresh = false) {
+  if (!forceRefresh && window.AppState.tenants) return window.AppState.tenants;
+  const { data, error } = await _supabase
+    .from('tenants')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error loading tenants:', error);
+    alert('Failed to load tenants: ' + error.message);
+    return [];
+  }
+
+  window.AppState.tenants = data;
+  return data;
+}
+
+async function registerTenant(tenantData) {
+  const { data, error } = await _supabase
+    .from('tenants')
+    .insert([tenantData])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error registering tenant:', error);
+    return null;
+  }
+  window.clearCache('tenants');
+  return data;
+}
+
+// ---- NOTICES ----
+async function loadNotices(forceRefresh = false) {
+  if (!forceRefresh && window.AppState.notices) return window.AppState.notices;
+  const { data, error } = await _supabase
+    .from('notices')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error loading notices:', error);
+    return [];
+  }
+  window.AppState.notices = data;
+  return data;
+}
+
+async function postNotice(noticeData) {
+  const { data, error } = await _supabase
+    .from('notices')
+    .insert([noticeData])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error posting notice:', error);
+    return null;
+  }
+  window.clearCache('notices');
+  return data;
+}
+
+// ---- MAINTENANCE ----
+async function loadMaintenanceRequests(forceRefresh = false) {
+  if (!forceRefresh && window.AppState.maintenance) return window.AppState.maintenance;
+  const { data, error } = await _supabase
+    .from('maintenance_requests')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error loading maintenance:', error);
+    return [];
+  }
+  window.AppState.maintenance = data;
+  return data;
+}
+
+async function createMaintenanceRequest(reqData) {
+  const { data, error } = await _supabase
+    .from('maintenance_requests')
+    .insert([reqData])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error creating maintenance request:', error);
+    return null;
+  }
+  window.clearCache('maintenance');
+  return data;
+}
+
+async function updateMaintenanceStatus(id, status) {
+  const { data, error } = await _supabase
+    .from('maintenance_requests')
+    .update({ status })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error updating maintenance status:', error);
+    return null;
+  }
+  window.clearCache('maintenance');
+  return data;
+}
+
+// ---- UTILS ----
+function formatRoomTitle(roomNumber) {
+  const num = roomNumber.replace(/\D/g, '');
+  return `Room ${num || roomNumber}`;
+}
+
+function formatRent(amount) {
+  return 'KES ' + Number(amount).toLocaleString('en-KE');
+}
+
+function timeAgo(dateStr) {
+  const now = new Date();
+  const date = new Date(dateStr);
+  const diff = Math.floor((now - date) / 1000);
+  if (diff < 60) return 'Just now';
+  if (diff < 3600) return Math.floor(diff / 60) + ' min ago';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+  return date.toLocaleDateString('en-KE', { day: 'numeric', month: 'short' });
+}
