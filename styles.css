@@ -68,23 +68,23 @@ body {
 }
 
 .badge-vacant {
-  background: var(--green-bg);
-  color: var(--green);
-  border: 1px solid var(--green-border);
-}
-
-.badge-vacant::before {
-  background: var(--green);
-}
-
-.badge-occupied {
   background: var(--red-bg);
   color: var(--red);
   border: 1px solid var(--red-border);
 }
 
-.badge-occupied::before {
+.badge-vacant::before {
   background: var(--red);
+}
+
+.badge-occupied {
+  background: var(--green-bg);
+  color: var(--green);
+  border: 1px solid var(--green-border);
+}
+
+.badge-occupied::before {
+  background: var(--green);
 }
 
 .badge-reserved {
