@@ -13,6 +13,26 @@ const _supabase = window._supabase;
 window.LANDLORD_PHONE = '254717056096';
 const LANDLORD_PHONE = window.LANDLORD_PHONE;
 
+// ---- GLOBAL STATE CACHE ----
+window.AppState = {
+  rooms: null,
+  payments: null,
+  tenants: null,
+  notices: null,
+  maintenance: null
+};
+
+window.clearCache = function(key) {
+  if (key) window.AppState[key] = null;
+  else {
+    window.AppState.rooms = null;
+    window.AppState.payments = null;
+    window.AppState.tenants = null;
+    window.AppState.notices = null;
+    window.AppState.maintenance = null;
+  }
+};
+
 // ---- AUTH HELPER ----
 async function getCurrentUser() {
   const { data: { session } } = await _supabase.auth.getSession();
@@ -20,7 +40,8 @@ async function getCurrentUser() {
 }
 
 // ---- ROOMS DATA ----
-async function loadRooms() {
+async function loadRooms(forceRefresh = false) {
+  if (!forceRefresh && window.AppState.rooms) return window.AppState.rooms;
   const { data, error } = await _supabase
     .from('rooms')
     .select('*')
@@ -33,13 +54,14 @@ async function loadRooms() {
   }
   
   // Map database columns to application properties
-  return data.map(r => ({
+  window.AppState.rooms = data.map(r => ({
     roomNumber: r.room_number,
     rent: r.monthly_rent,
     status: r.status,
     roomPassword: r.room_password,
     apartmentId: r.apartment_id
   }));
+  return window.AppState.rooms;
 }
 
 async function updateRoom(roomNumber, updates) {
@@ -63,6 +85,7 @@ async function updateRoom(roomNumber, updates) {
     console.error('Error updating room:', error);
     return null;
   }
+  window.clearCache('rooms');
   return data;
 }
 
@@ -115,7 +138,8 @@ async function getRoomStats() {
 }
 
 // ---- PAYMENTS DATA ----
-async function loadPayments() {
+async function loadPayments(forceRefresh = false) {
+  if (!forceRefresh && window.AppState.payments) return window.AppState.payments;
   const { data, error } = await _supabase
     .from('payments')
     .select('*')
@@ -127,7 +151,7 @@ async function loadPayments() {
     return [];
   }
 
-  return data.map(p => ({
+  window.AppState.payments = data.map(p => ({
     id: p.id,
     tenantName: p.tenant_name,
     unitNumber: p.room_number || p.unit_number,
@@ -139,6 +163,7 @@ async function loadPayments() {
     month: p.month,
     receiptImage: p.receipt_image
   }));
+  return window.AppState.payments;
 }
 
 async function updatePaymentStatus(paymentId, status) {
@@ -156,6 +181,8 @@ async function updatePaymentStatus(paymentId, status) {
     console.error('Error updating payment:', error);
     return null;
   }
+  
+  window.clearCache('payments');
   
   return {
     id: data.id,
@@ -183,7 +210,8 @@ async function getPaymentStats() {
 }
 
 // ---- TENANTS ----
-async function loadTenants() {
+async function loadTenants(forceRefresh = false) {
+  if (!forceRefresh && window.AppState.tenants) return window.AppState.tenants;
   const { data, error } = await _supabase
     .from('tenants')
     .select('*')
@@ -195,6 +223,7 @@ async function loadTenants() {
     return [];
   }
 
+  window.AppState.tenants = data;
   return data;
 }
 
@@ -209,11 +238,13 @@ async function registerTenant(tenantData) {
     console.error('Error registering tenant:', error);
     return null;
   }
+  window.clearCache('tenants');
   return data;
 }
 
 // ---- NOTICES ----
-async function loadNotices() {
+async function loadNotices(forceRefresh = false) {
+  if (!forceRefresh && window.AppState.notices) return window.AppState.notices;
   const { data, error } = await _supabase
     .from('notices')
     .select('*')
@@ -223,6 +254,7 @@ async function loadNotices() {
     console.error('Error loading notices:', error);
     return [];
   }
+  window.AppState.notices = data;
   return data;
 }
 
@@ -237,11 +269,13 @@ async function postNotice(noticeData) {
     console.error('Error posting notice:', error);
     return null;
   }
+  window.clearCache('notices');
   return data;
 }
 
 // ---- MAINTENANCE ----
-async function loadMaintenanceRequests() {
+async function loadMaintenanceRequests(forceRefresh = false) {
+  if (!forceRefresh && window.AppState.maintenance) return window.AppState.maintenance;
   const { data, error } = await _supabase
     .from('maintenance_requests')
     .select('*')
@@ -251,6 +285,7 @@ async function loadMaintenanceRequests() {
     console.error('Error loading maintenance:', error);
     return [];
   }
+  window.AppState.maintenance = data;
   return data;
 }
 
@@ -265,6 +300,7 @@ async function createMaintenanceRequest(reqData) {
     console.error('Error creating maintenance request:', error);
     return null;
   }
+  window.clearCache('maintenance');
   return data;
 }
 
@@ -280,6 +316,7 @@ async function updateMaintenanceStatus(id, status) {
     console.error('Error updating maintenance status:', error);
     return null;
   }
+  window.clearCache('maintenance');
   return data;
 }
 
