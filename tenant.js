@@ -232,7 +232,11 @@ window.loadTenantFixHistory = async function(roomNumber) {
 window.deleteTenantFix = async function(id, roomNumber) {
   if (!confirm('Delete this request?')) return;
   const { error } = await getDB().from('maintenance_requests').delete().eq('id', id);
-  if (!error) { alert('Record deleted'); loadTenantFixHistory(roomNumber); }
+  if (!error) { 
+    window.clearCache('maintenance');
+    alert('Record deleted'); 
+    loadTenantFixHistory(roomNumber); 
+  }
   else alert('Failed: ' + error.message);
 };
 
