@@ -28,6 +28,7 @@ async function loadRooms() {
   
   if (error) {
     console.error('Error loading rooms:', error);
+    alert('Failed to load rooms: ' + error.message);
     return [];
   }
   
@@ -122,6 +123,7 @@ async function loadPayments() {
 
   if (error) {
     console.error('Error loading payments:', error);
+    alert('Failed to load payments: ' + error.message);
     return [];
   }
 
@@ -189,6 +191,7 @@ async function loadTenants() {
 
   if (error) {
     console.error('Error loading tenants:', error);
+    alert('Failed to load tenants: ' + error.message);
     return [];
   }
 
