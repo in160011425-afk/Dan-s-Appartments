@@ -136,6 +136,8 @@ window.openModal = async function(roomNumber) {
         <span class="badge badge-${(room.status||'vacant').toLowerCase()}">${room.status||'vacant'}</span>
       </div>
       <div class="space-y-4">
+        <div><label class="block text-xs font-bold text-gray-400 uppercase mb-2">Room Number</label>
+          <input type="text" id="roomNumberInput" value="${room.roomNumber||''}" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none text-sm"></div>
         <div><label class="block text-xs font-bold text-gray-400 uppercase mb-2">Monthly Rent (KES)</label>
           <input type="number" id="roomRentInput" value="${room.rent||''}" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none text-sm"></div>
         <div><label class="block text-xs font-bold text-gray-400 uppercase mb-2">Status</label>
@@ -153,7 +155,9 @@ window.openModal = async function(roomNumber) {
 };
 
 window.saveRoomDetails = async function(roomNumber) {
+  const newRoomNumber = document.getElementById('roomNumberInput').value.trim();
   const res = await updateRoom(roomNumber, {
+    newRoomNumber: newRoomNumber,
     roomPassword: document.getElementById('roomPasswordInput').value,
     rent: parseInt(document.getElementById('roomRentInput').value),
     status: document.getElementById('roomStatusInput').value
