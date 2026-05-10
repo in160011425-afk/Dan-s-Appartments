@@ -53,14 +53,18 @@ async function loadRooms(forceRefresh = false) {
     return [];
   }
   
-  // Map database columns to application properties
+  // Map database columns to application properties and sort numerically
   window.AppState.rooms = data.map(r => ({
     roomNumber: r.room_number,
     rent: r.monthly_rent,
     status: r.status,
     roomPassword: r.room_password,
     apartmentId: r.apartment_id
-  }));
+  })).sort((a, b) => {
+    const numA = parseInt(a.roomNumber.replace(/\D/g, ''), 10) || 0;
+    const numB = parseInt(b.roomNumber.replace(/\D/g, ''), 10) || 0;
+    return numA - numB;
+  });
   return window.AppState.rooms;
 }
 
@@ -330,8 +334,8 @@ async function updateMaintenanceStatus(id, status) {
 
 // ---- UTILS ----
 function formatRoomTitle(roomNumber) {
-  const num = roomNumber.replace(/\D/g, '');
-  return `Room ${num || roomNumber}`;
+  const num = String(roomNumber).replace(/\D/g, '');
+  return `ROOM ${num.padStart(2, '0')}`;
 }
 
 function formatRent(amount) {
