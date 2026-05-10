@@ -1,653 +1,303 @@
-// LANDLORD DASHBOARD — app.js
-let currentFilter = 'all';
+// =============================================
+// TENANT SEARCH PAGE — tenant.js
+// =============================================
 
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  if (!t) return;
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 3000);
+let db = window._supabase;
+
+// Ensure DB is ready even if rooms.js loads slightly after
+function getDB() {
+  if (!db) db = window._supabase;
+  return db;
 }
-function closeModal() { document.getElementById('roomModal')?.classList.remove('active'); }
-function closeReceiptModal() { document.getElementById('receiptModal')?.classList.remove('active'); }
 
-// AUTH
 document.addEventListener('DOMContentLoaded', async () => {
-  const db = window._supabase;
-  if (!db) return;
-  db.auth.onAuthStateChange((event, session) => {
-    const modal = document.getElementById('loginModal');
-    const main = document.querySelector('main');
-    const nav = document.querySelector('nav');
-    if (session) {
-      modal?.classList.add('hidden'); modal?.classList.remove('active','!flex');
-      main?.classList.remove('hidden'); nav?.classList.remove('hidden');
-      initializeApp();
-    } else {
-      modal?.classList.remove('hidden'); modal?.classList.add('active','!flex');
-      main?.classList.add('hidden'); nav?.classList.add('hidden');
-    }
+  // Wait briefly to ensure supabase client is ready
+  await new Promise(r => setTimeout(r, 150));
+  db = window._supabase;
+  if (!db) { console.error('Supabase not ready'); return; }
+  await renderVacantRooms();
+  
+  document.getElementById('searchInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('passwordInput').focus();
   });
-  const { data: { session } } = await db.auth.getSession();
-  if (!session) {
-    document.getElementById('loginModal')?.classList.remove('hidden');
-    document.getElementById('loginModal')?.classList.add('active','!flex');
-    document.querySelector('main')?.classList.add('hidden');
-    document.querySelector('nav')?.classList.add('hidden');
-  }
+  document.getElementById('passwordInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') searchRoom();
+  });
 });
 
-window.handleLogin = async function() {
-  const email = document.getElementById('loginEmail')?.value?.trim();
-  const password = document.getElementById('loginPassword')?.value;
-  const btn = document.getElementById('loginBtn');
-  const errorEl = document.getElementById('loginError');
-  
-  if (errorEl) errorEl.classList.add('hidden');
-  
-  if (!email || !password) { 
-    if (errorEl) { errorEl.textContent = 'Email and password required'; errorEl.classList.remove('hidden'); }
-    return; 
-  }
-  
-  btn.disabled = true; btn.innerHTML = 'Signing in...';
-  const { error } = await window._supabase.auth.signInWithPassword({ email, password });
-  
-  if (error) { 
-    if (errorEl) { 
-      errorEl.textContent = 'Invalid login credentials'; 
-      errorEl.classList.remove('hidden'); 
-    }
-    btn.disabled = false; btn.innerHTML = 'Access Dashboard'; 
-  }
-};
+// ---- Search ----
+window.searchRoom = async function() {
+  const roomNumber = document.getElementById('searchInput').value.trim();
+  const roomPassword = document.getElementById('passwordInput').value.trim();
+  const section = document.getElementById('resultSection');
+  const btn = document.getElementById('searchBtn');
 
-window.handleLogout = async function() {
-  if (!confirm('Sign out?')) return;
-  try {
-    await window._supabase.auth.signOut();
-  } catch (err) {
-    console.error('Sign out error:', err);
-  } finally {
-    window.location.reload();
+  if (!roomNumber || !roomPassword) {
+    section.innerHTML = `
+      <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center fade-in">
+        <p class="text-amber-700 font-medium text-sm">⚠️ Please enter both Room Number and Password.</p>
+      </div>`;
+    return;
   }
-};
 
-window.initializeApp = async function() {
-  await Promise.all([renderStats(), renderRooms()]);
-  setTimeout(generateQR, 300);
-};
+  btn.disabled = true;
+  const originalHtml = btn.innerHTML;
+  btn.innerHTML = 'Searching...';
 
-window.switchView = function(view) {
-  document.querySelectorAll('.view-content').forEach(el => el.classList.add('hidden'));
-  document.getElementById(view + 'View')?.classList.remove('hidden');
-  document.querySelectorAll('.nav-item').forEach(n => {
-    if (n.id === 'nav-' + view) { n.classList.add('text-teal-600','font-bold','bg-teal-50'); n.classList.remove('text-gray-400'); }
-    else { n.classList.remove('text-teal-600','font-bold','bg-teal-50'); n.classList.add('text-gray-400'); }
+  // Securely verify access
+  const room = await verifyRoomAccess(roomNumber, roomPassword);
+
+  btn.disabled = false;
+  btn.innerHTML = originalHtml;
+
+  if (!room) {
+    section.innerHTML = `
+      <div class="bg-red-50 border border-red-200 rounded-xl p-6 text-center fade-in">
+        <svg class="w-12 h-12 mx-auto mb-3 text-red-300" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
+        </svg>
+        <p class="text-red-700 font-bold mb-1">Access Denied</p>
+        <p class="text-red-500 text-sm">Incorrect Room Number or Password. Please check your credentials or contact management.</p>
+      </div>`;
+    return;
+  }
+
+  section.innerHTML = buildRoomCard(room, true);
+  // Reset tabs to Info
+  setTimeout(() => {
+    switchTenantTab('info');
+    loadTenantNotices();
+    loadTenantFixHistory(room.roomNumber);
+  }, 50);
+}
+
+// ---- Tab System ----
+window.switchTenantTab = function(tab) {
+  document.querySelectorAll('.tenant-tab-content').forEach(c => c.classList.add('hidden'));
+  document.querySelectorAll('.tenant-tab-btn').forEach(b => {
+    b.classList.remove('border-teal-600', 'text-teal-600');
+    b.classList.add('border-transparent', 'text-gray-400');
   });
-  if (view === 'rooms') { renderStats(); renderRooms(); setTimeout(generateQR, 300); }
-  if (view === 'payments') { renderPaymentStats(); renderPayments(); }
-  if (view === 'tenants') renderTenants();
-  if (view === 'notices') renderNotices();
-  if (view === 'maintenance') renderMaintenance();
+
+  const target = document.getElementById('tab-' + tab);
+  const btn = document.getElementById('btn-tab-' + tab);
+  
+  if (target) target.classList.remove('hidden');
+  if (btn) {
+    btn.classList.add('border-teal-600', 'text-teal-600');
+    btn.classList.remove('border-transparent', 'text-gray-400');
+  }
 };
 
-// ROOMS
-window.renderStats = async function() {
-  const stats = await getRoomStats();
-  const s = document.getElementById('statsSection');
-  if (!s) return;
-  s.innerHTML = [['Total',stats.total],['Vacant',stats.vacant],['Occupied',stats.occupied],['Reserved',stats.reserved]].map(([l,v]) => `
-    <div class="flex-shrink-0 bg-white rounded-2xl p-4 shadow-sm border border-gray-100 min-w-[110px]">
-      <p class="text-xs font-bold text-gray-400 uppercase mb-1">${l}</p>
-      <p class="text-2xl font-black text-gray-900">${v}</p>
-    </div>`).join('');
-};
+// ---- Build Room Card ----
+function buildRoomCard(room, isSearch) {
+  const whatsappMsg = encodeURIComponent(`Hello, I'm interested in Room ${room.roomNumber} at Dan's Rentals. Is it still ${room.status}?`);
+  const whatsappUrl = `https://wa.me/${LANDLORD_PHONE}?text=${whatsappMsg}`;
+  const callUrl = `tel:+${LANDLORD_PHONE}`;
+  const viewingMsg = encodeURIComponent(`Hi, I would like to schedule a viewing for Room ${room.roomNumber} at Dan's Rentals. Please let me know available times.`);
+  const viewingUrl = `https://wa.me/${LANDLORD_PHONE}?text=${viewingMsg}`;
 
-window.setFilter = function(filter) {
-  currentFilter = filter;
-  document.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b.dataset.filter === filter));
-  renderRooms();
-};
-
-window.renderRooms = async function() {
-  const rooms = await loadRooms();
-  const grid = document.getElementById('roomsList');
-  if (!grid) return;
-  const filtered = rooms.filter(r => currentFilter === 'all' || (r.status||'vacant').toLowerCase() === currentFilter.toLowerCase());
-  if (!filtered.length) { grid.innerHTML = `<div class="col-span-full text-center py-20 text-gray-400">No ${currentFilter} rooms found.</div>`; return; }
-  grid.innerHTML = filtered.map(r => `
-    <div class="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 hover:shadow-xl transition-all cursor-pointer group" onclick="openModal('${r.roomNumber}')">
-      <div class="flex justify-between items-start mb-4">
-        <div><h3 class="text-lg font-black text-gray-900">${formatRoomTitle(r.roomNumber)}</h3><p class="text-xs font-bold text-gray-400 uppercase">Room Details</p></div>
-        <span class="badge badge-${(r.status||'vacant').toLowerCase()}">${r.status||'vacant'}</span>
+  return `
+    <div class="bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100 fade-in">
+      <!-- Tabs Header -->
+      <div class="flex border-b border-gray-50 px-6">
+        <button onclick="switchTenantTab('info')" id="btn-tab-info" class="tenant-tab-btn flex-1 py-4 text-xs font-bold uppercase tracking-widest border-b-2 transition-all">Info</button>
+        <button onclick="switchTenantTab('notices')" id="btn-tab-notices" class="tenant-tab-btn flex-1 py-4 text-xs font-bold uppercase tracking-widest border-b-2 border-transparent text-gray-400 transition-all">Notices</button>
+        <button onclick="switchTenantTab('fixes')" id="btn-tab-fixes" class="tenant-tab-btn flex-1 py-4 text-xs font-bold uppercase tracking-widest border-b-2 border-transparent text-gray-400 transition-all">Fixes</button>
       </div>
-      <p class="text-xl font-bold text-teal-700">${formatRent(r.rent)}</p>
-    </div>`).join('');
-};
 
-window.openModal = async function(roomNumber) {
-  const room = await findRoom(roomNumber);
-  if (!room) return;
-  document.getElementById('modalBody').innerHTML = `
-    <div class="p-6">
-      <div class="flex justify-between items-start mb-6">
-        <div><h3 class="text-xl font-bold text-gray-900">${formatRoomTitle(room.roomNumber)}</h3></div>
-        <span class="badge badge-${(room.status||'vacant').toLowerCase()}">${room.status||'vacant'}</span>
-      </div>
-      <div class="space-y-4">
-        <div><label class="block text-xs font-bold text-gray-400 uppercase mb-2">Room Number</label>
-          <input type="text" id="roomNumberInput" value="${room.roomNumber||''}" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none text-sm"></div>
-        <div><label class="block text-xs font-bold text-gray-400 uppercase mb-2">Monthly Rent (KES)</label>
-          <input type="number" id="roomRentInput" value="${room.rent||''}" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none text-sm"></div>
-        <div><label class="block text-xs font-bold text-gray-400 uppercase mb-2">Status</label>
-          <select id="roomStatusInput" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none text-sm">
-            <option value="vacant" ${(room.status||'').toLowerCase()==='vacant'?'selected':''}>Vacant</option>
-            <option value="occupied" ${(room.status||'').toLowerCase()==='occupied'?'selected':''}>Occupied</option>
-            <option value="reserved" ${(room.status||'').toLowerCase()==='reserved'?'selected':''}>Reserved</option>
-          </select></div>
-        <div><label class="block text-xs font-bold text-gray-400 uppercase mb-2">Room Password</label>
-          <input type="text" id="roomPasswordInput" value="${room.roomPassword||''}" placeholder="Tenant access password" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none text-sm"></div>
-        <button onclick="saveRoomDetails('${room.roomNumber}')" class="w-full py-4 bg-teal-600 text-white font-bold rounded-2xl">Save Changes</button>
+      <div class="p-6">
+        <!-- INFO TAB -->
+        <div id="tab-info" class="tenant-tab-content space-y-5">
+          <div class="flex items-start justify-between">
+            <div>
+              <h3 class="text-2xl font-bold text-gray-900">${formatRoomTitle(room.roomNumber)}</h3>
+              <p class="text-sm text-gray-500 uppercase font-bold tracking-wider">Property Details</p>
+            </div>
+            <span class="badge badge-${room.status}">${room.status}</span>
+          </div>
+
+          <div class="bg-teal-50 rounded-2xl px-5 py-4 border border-teal-100 shadow-sm">
+            <p class="text-xs text-teal-600 font-bold uppercase tracking-widest mb-1">Monthly Rent</p>
+            <p class="text-3xl font-bold text-teal-800">${formatRent(room.rent)}</p>
+          </div>
+
+          <div>
+            <p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Details</p>
+            <p class="text-sm text-gray-600 leading-relaxed">Contact management for more information about this unit.</p>
+          </div>
+
+          <div class="pt-4 border-t border-gray-50">
+            <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4 text-center">Contact Management</p>
+            <div class="grid grid-cols-1 gap-3">
+              <a href="${whatsappUrl}" target="_blank" class="w-full py-4 bg-[#25D366] text-white rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-green-100 transition-all hover:brightness-95 active:scale-95">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.625.846 5.059 2.284 7.034L.789 23.492a.5.5 0 00.611.611l4.458-1.495A11.952 11.952 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-2.317 0-4.478-.672-6.32-1.828l-.352-.216-3.451 1.157 1.157-3.451-.216-.352A9.955 9.955 0 012 12C2 6.486 6.486 2 12 2s10 4.486 10 10-4.486 10-10 10z"/></svg>
+                Message Management
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <!-- NOTICES TAB -->
+        <div id="tab-notices" class="tenant-tab-content hidden space-y-4">
+          <h4 class="text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Management Updates</h4>
+          <div id="tenantNoticesList" class="space-y-3">
+            <div class="animate-pulse flex space-x-4">
+              <div class="rounded-full bg-gray-200 h-10 w-10"></div>
+              <div class="flex-1 space-y-6 py-1">
+                <div class="h-2 bg-gray-200 rounded"></div>
+                <div class="h-2 bg-gray-200 rounded"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- FIXES TAB -->
+        <div id="tab-fixes" class="tenant-tab-content hidden space-y-5">
+          <div>
+            <h4 class="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Report an Issue</h4>
+            <p class="text-xs text-gray-500 mb-4">Submit a repair request to management.</p>
+            
+            <div class="space-y-3">
+              <input type="text" id="maintIssue" placeholder="Brief issue (e.g. Leaking Sink)" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none text-sm focus:ring-2 focus:ring-teal-500">
+              <textarea id="maintDesc" rows="3" placeholder="Provide more details..." class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none text-sm focus:ring-2 focus:ring-teal-500"></textarea>
+              <button onclick="submitMaintenanceRequestFlow('${room.roomNumber}')" id="maintSubmitBtn" class="w-full py-3 bg-teal-600 text-white font-bold rounded-xl shadow-md transition-all active:scale-95">Submit Request</button>
+            </div>
+          </div>
+
+          <div class="pt-4 border-t border-gray-50">
+            <h4 class="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Your Fix History</h4>
+            <div id="tenantFixHistory" class="space-y-3 text-center py-4">
+              <p class="text-[10px] text-gray-400 italic">No recent maintenance requests found.</p>
+            </div>
+          </div>
+        </div>
       </div>
     </div>`;
-  document.getElementById('roomModal').classList.add('active');
-};
+}
 
-window.saveRoomDetails = async function(roomNumber) {
-  const newRoomNumber = document.getElementById('roomNumberInput').value.trim();
-  const res = await updateRoom(roomNumber, {
-    newRoomNumber: newRoomNumber,
-    roomPassword: document.getElementById('roomPasswordInput').value,
-    rent: parseInt(document.getElementById('roomRentInput').value),
-    status: document.getElementById('roomStatusInput').value
-  });
-  if (res) { showToast('Room updated'); closeModal(); renderStats(); renderRooms(); }
-  else alert('Save failed');
-};
+window.loadTenantNotices = async function() {
+  const list = document.getElementById('tenantNoticesList');
+  if (!list) return;
 
-window.openAddRoomModal = function() {
-  document.getElementById('modalBody').innerHTML = `
-    <div class="p-6">
-      <h3 class="text-xl font-bold text-gray-900 mb-6">Create New Room</h3>
-      <div class="space-y-4">
-        <input type="text" id="newRoomNumber" placeholder="Room Number (e.g. 5)" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none text-sm">
-        <input type="number" id="newRoomRent" placeholder="Monthly Rent (KES)" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none text-sm">
-        <input type="text" id="newRoomPassword" placeholder="Room Password" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none text-sm">
-        <button onclick="createNewRoom()" class="w-full py-4 bg-teal-600 text-white font-bold rounded-2xl">Create Room</button>
+  const notices = await loadNotices();
+  if (notices.length === 0) {
+    list.innerHTML = `<p class="text-[10px] text-gray-400 italic py-4 text-center">No management updates at this time.</p>`;
+    return;
+  }
+
+  list.innerHTML = notices.map(n => `
+    <div class="${n.priority === 'high' ? 'bg-red-50 border border-red-100' : 'bg-gray-50'} rounded-2xl p-4 fade-in">
+      ${n.priority === 'high' ? `
+        <div class="flex items-center gap-2 mb-1">
+          <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+          <p class="text-[10px] font-bold text-red-700 uppercase">High Priority</p>
+        </div>
+      ` : ''}
+      <h5 class="font-bold text-gray-900 text-sm mb-1">${n.title}</h5>
+      <p class="text-xs text-gray-600 leading-relaxed">${n.content}</p>
+      <div class="mt-2">
+        <p class="text-[9px] text-gray-400 font-medium uppercase tracking-widest">${timeAgo(n.created_at)}</p>
       </div>
-    </div>`;
-  document.getElementById('roomModal').classList.add('active');
+    </div>
+  `).join('');
 };
 
-window.createNewRoom = async function() {
-  const rn = document.getElementById('newRoomNumber').value.trim();
-  const rent = parseInt(document.getElementById('newRoomRent').value);
-  const pw = document.getElementById('newRoomPassword').value.trim();
-  if (!rn || !rent) { alert('Room number and rent required'); return; }
-  const { error } = await window._supabase.from('rooms').insert([{ room_number: rn, monthly_rent: rent, status: 'vacant', room_password: pw||null }]);
+window.loadTenantFixHistory = async function(roomNumber) {
+  const historyCont = document.getElementById('tenantFixHistory');
+  if (!historyCont) return;
+
+  const requests = await loadMaintenanceRequests();
+  const roomRequests = requests.filter(r => r.room_number === roomNumber);
+
+  if (roomRequests.length === 0) {
+    historyCont.innerHTML = `<p class="text-[10px] text-gray-400 italic py-4 text-center">No recent maintenance requests found.</p>`;
+    return;
+  }
+
+  historyCont.innerHTML = roomRequests.map(r => `
+    <div class="bg-gray-50 rounded-xl p-3 text-left">
+      <div class="flex justify-between items-center mb-1">
+        <h6 class="font-bold text-gray-900 text-xs">${r.issue}</h6>
+        <span class="text-[9px] px-2 py-0.5 rounded-full font-black uppercase ${r.status === 'resolved' ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'}">${r.status}</span>
+      </div>
+      <div class="flex justify-between items-center mt-1">
+        <p class="text-[10px] text-gray-400">${timeAgo(r.created_at)}</p>
+        <button onclick="deleteTenantFix('${r.id}', '${r.room_number}')" class="text-[9px] font-bold text-red-400 hover:text-red-600 uppercase">Delete</button>
+      </div>
+    </div>
+  `).join('');
+};
+
+window.deleteTenantFix = async function(id, roomNumber) {
+  if (!confirm('Delete this request?')) return;
+  const { error } = await getDB().from('maintenance_requests').delete().eq('id', id);
   if (!error) { 
-    window.clearCache('rooms');
-    showToast('Room created'); closeModal(); renderStats(); renderRooms(); 
+    window.clearCache('maintenance');
+    alert('Record deleted'); 
+    loadTenantFixHistory(roomNumber); 
   }
   else alert('Failed: ' + error.message);
 };
 
-window.generateQR = function() {
-  const c = document.getElementById('qrcode');
-  if (!c || typeof QRCode === 'undefined') return;
-  c.innerHTML = '';
-  const url = window.location.href.replace(/\/[^\/]*$/, '/') + 'tenant.html';
-  new QRCode(c, { text: url, width: 160, height: 160, colorDark: '#0f172a', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.H });
-};
+window.submitMaintenanceRequestFlow = async function(roomNumber) {
+  const issue = document.getElementById('maintIssue').value.trim();
+  const description = document.getElementById('maintDesc').value.trim();
 
-window.downloadQR = function() {
-  const c = document.getElementById('qrcode');
-  if (!c) return;
-  const canvas = c.querySelector('canvas');
-  const img = c.querySelector('img');
-  const src = canvas ? canvas.toDataURL('image/png') : img?.src;
-  if (!src) { alert('QR not ready'); return; }
-  const a = document.createElement('a'); a.href = src; a.download = 'dans-rentals-qr.png'; a.click();
-  showToast('QR downloaded');
-};
+  if (!issue) return alert('Please specify the issue');
 
-window.copyTenantLink = function() {
-  const url = window.location.href.replace(/\/[^\/]*$/, '/') + 'tenant.html';
-  navigator.clipboard.writeText(url).then(() => showToast('Link copied'));
-};
+  const btn = document.getElementById('maintSubmitBtn');
+  btn.disabled = true;
+  btn.innerHTML = 'Submitting...';
 
-// NOTICES
-window.renderNotices = async function() {
-  const notices = await loadNotices();
-  const list = document.getElementById('noticesList');
-  if (!list) return;
-  if (!notices.length) { list.innerHTML = '<div class="text-center py-12 text-gray-400 italic">No notices yet.</div>'; return; }
-  list.innerHTML = notices.map(n => `
-    <div class="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 fade-in">
-      <div class="flex justify-between items-start mb-3">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-2xl bg-teal-50 flex items-center justify-center text-teal-600 text-xl">📢</div>
-          <div><h4 class="font-bold text-gray-900">${n.title}</h4>
-            <p class="text-xs text-gray-400 uppercase font-bold">${timeAgo(n.created_at)}</p></div>
-        </div>
-        ${n.priority==='high'?'<span class="text-[9px] font-black text-red-600 bg-red-50 px-2 py-1 rounded-lg">HIGH</span>':''}
-      </div>
-      <p class="text-sm text-gray-600 mb-3">${n.content}</p>
-      <div class="flex justify-end">
-        <button onclick="deleteNotice('${n.id}')" class="text-[10px] font-bold text-red-400 hover:text-red-600 uppercase">Delete</button>
-      </div>
-    </div>`).join('');
-};
-
-window.deleteNotice = async function(id) {
-  if (!confirm('Delete this notice?')) return;
-  try {
-    const { error } = await window._supabase.from('notices').delete().eq('id', id);
-    if (error) throw error;
-    window.clearCache('notices');
-    showToast('Notice deleted');
-    renderNotices();
-  } catch (err) {
-    alert('Failed to delete notice: ' + err.message);
-    console.error(err);
+  const result = await createMaintenanceRequest({ room_number: roomNumber, issue, description });
+  if (result) {
+    alert('Your maintenance request has been submitted successfully.');
+    document.getElementById('maintIssue').value = '';
+    document.getElementById('maintDesc').value = '';
+    loadTenantFixHistory(roomNumber);
+  } else {
+    alert('Failed to submit request. Please try again.');
   }
+  btn.disabled = false;
+  btn.innerHTML = 'Submit Request';
 };
 
-window.openNoticeModal = function() {
-  document.getElementById('modalBody').innerHTML = `
-    <div class="p-6">
-      <h3 class="text-xl font-bold text-gray-900 mb-6">Publish New Notice</h3>
-      <div class="space-y-4">
-        <input type="text" id="noticeTitle" placeholder="Notice Title" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none text-sm">
-        <textarea id="noticeContent" rows="4" placeholder="Notice details..." class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none text-sm"></textarea>
-        <label class="flex items-center gap-3"><input type="checkbox" id="noticePriority" class="w-4 h-4">
-          <span class="text-sm text-gray-600">Mark as High Priority</span></label>
-        <button onclick="publishNotice()" class="w-full py-4 bg-teal-600 text-white font-bold rounded-2xl">Publish Notice</button>
-      </div>
-    </div>`;
-  document.getElementById('roomModal').classList.add('active');
-};
-
-window.publishNotice = async function() {
-  const title = document.getElementById('noticeTitle').value.trim();
-  const content = document.getElementById('noticeContent').value.trim();
-  const priority = document.getElementById('noticePriority').checked ? 'high' : 'normal';
-  if (!title || !content) { alert('Fill in title and content'); return; }
-  const res = await postNotice({ title, content, priority });
-  if (res) { showToast('Notice published'); closeModal(); renderNotices(); }
-  else alert('Failed to publish');
-};
-
-// MAINTENANCE
-window.renderMaintenance = async function() {
-  const requests = await loadMaintenanceRequests();
-  const pending = document.getElementById('pendingFixes');
-  const active = document.getElementById('activeFixes');
-  const resolved = document.getElementById('resolvedFixes');
-  if (!pending) return;
-  const card = (req) => `
-    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-50 fade-in">
-      <div class="flex justify-between items-center mb-2">
-        <span class="text-xs font-black text-teal-600 bg-teal-50 px-2 py-1 rounded-lg">Room ${req.room_number}</span>
-        <span class="text-[10px] text-gray-400">${timeAgo(req.created_at)}</span>
-      </div>
-      <h4 class="font-bold text-sm text-gray-900 mb-1">${req.issue}</h4>
-      <p class="text-xs text-gray-500 mb-3">${req.description||''}</p>
-      <div class="flex gap-2">
-        <button onclick="openMaintenanceDetails('${req.id}')" class="flex-1 py-2 rounded-xl bg-gray-50 text-gray-600 text-[10px] font-bold">Details</button>
-        <button onclick="deleteMaintenanceRequest('${req.id}')" class="px-3 py-2 rounded-xl bg-red-50 text-red-400 text-[10px] font-bold">Delete</button>
-      </div>
-    </div>`;
-  const empty = (msg) => `<p class="text-xs text-gray-400 text-center py-4 italic">${msg}</p>`;
-  pending.innerHTML = requests.filter(r=>r.status==='pending').map(card).join('')||empty('No pending requests');
-  active.innerHTML = requests.filter(r=>r.status==='active').map(card).join('')||empty('No active repairs');
-  resolved.innerHTML = requests.filter(r=>r.status==='resolved').map(card).join('')||empty('No resolved requests');
-};
-
-window.openMaintenanceDetails = async function(id) {
-  const { data: req, error } = await window._supabase.from('maintenance_requests').select('*').eq('id', id).single();
-  if (error || !req) { alert('Could not load details'); return; }
-  document.getElementById('modalBody').innerHTML = `
-    <div class="p-6">
-      <div class="flex justify-between items-start mb-6">
-        <div><h3 class="text-xl font-bold text-gray-900">${req.issue}</h3>
-          <p class="text-xs text-gray-400 uppercase font-bold mt-1">Room ${req.room_number} · ${timeAgo(req.created_at)}</p></div>
-        <span class="badge badge-${req.status}">${req.status}</span>
-      </div>
-      <div class="bg-gray-50 rounded-2xl p-4 mb-6">
-        <p class="text-sm text-gray-600">${req.description||'No description provided.'}</p>
-      </div>
-      <div class="grid grid-cols-3 gap-2">
-        ${['pending','active','resolved'].map(s=>`
-          <button onclick="updateFixStatus('${req.id}','${s}')" class="py-3 rounded-xl text-xs font-bold capitalize ${req.status===s?'bg-teal-600 text-white':'bg-gray-50 text-gray-500'}">${s}</button>`).join('')}
-      </div>
-    </div>`;
-  document.getElementById('roomModal').classList.add('active');
-};
-
-window.updateFixStatus = async function(id, status) {
-  const { error } = await window._supabase.from('maintenance_requests').update({ status }).eq('id', id);
-  if (!error) { 
-    window.clearCache('maintenance');
-    showToast('Status updated'); closeModal(); renderMaintenance(); 
-  }
-};
-
-window.deleteMaintenanceRequest = async function(id) {
-  if (!confirm('Delete this record?')) return;
-  try {
-    const { error } = await window._supabase.from('maintenance_requests').delete().eq('id', id);
-    if (error) throw error;
-    window.clearCache('maintenance');
-    showToast('Record deleted');
-    renderMaintenance();
-  } catch (err) {
-    alert('Failed to delete record: ' + err.message);
-    console.error(err);
-  }
-};
-
-// TENANTS
-window.renderTenants = async function() {
-  const list = document.getElementById('tenantsList');
-  if (!list) return;
-  list.innerHTML = '<div class="col-span-full py-12 flex justify-center"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div></div>';
-  const tenants = await loadTenants();
-  if (!tenants.length) { list.innerHTML = '<div class="col-span-full text-center py-12 text-gray-400 italic">No tenants registered yet.</div>'; return; }
-  list.innerHTML = tenants.map(t => `
-    <div class="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 fade-in">
-      <div class="flex items-center gap-4 mb-4">
-        <div class="w-12 h-12 rounded-full bg-teal-50 flex items-center justify-center text-teal-600 font-bold text-lg">
-          ${t.name.split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2)}</div>
-        <div><h4 class="font-bold text-gray-900">${t.name}</h4>
-          <p class="text-xs text-gray-400 font-bold uppercase">Unit ${t.room_number}</p></div>
-      </div>
-      <div class="space-y-2 text-sm mb-4">
-        <div class="flex justify-between"><span class="text-gray-400">Phone</span><span class="font-medium">${t.phone||'N/A'}</span></div>
-        <div class="flex justify-between"><span class="text-gray-400">Since</span><span class="font-medium">${t.lease_start ? new Date(t.lease_start).toLocaleDateString() : 'N/A'}</span></div>
-      </div>
-      <div class="flex justify-end gap-2 border-t border-gray-50 pt-3">
-        <button onclick="openEditTenantModal('${t.id}')" class="text-[10px] font-bold text-gray-400 hover:text-gray-600 uppercase">Edit</button>
-        <button onclick="deleteTenant('${t.id}', '${t.room_number}')" class="text-[10px] font-bold text-red-400 hover:text-red-600 uppercase">Delete</button>
-      </div>
-    </div>`).join('');
-};
-
-window.deleteTenant = async function(id, roomNumber) {
-  if (!confirm('Are you sure you want to remove this tenant? This will also mark their room as vacant.')) return;
-  try {
-    const { error } = await window._supabase.from('tenants').delete().eq('id', id);
-    if (error) throw error;
-    
-    // Mark room as vacant
-    await window._supabase.from('rooms').update({ status: 'vacant' }).eq('room_number', roomNumber);
-    
-    window.clearCache('tenants');
-    window.clearCache('rooms');
-    showToast('Tenant removed');
-    renderTenants();
-    renderRooms();
-    renderStats();
-  } catch (err) {
-    alert('Failed to delete tenant: ' + err.message);
-  }
-};
-
-window.openEditTenantModal = async function(id) {
-  const tenants = await loadTenants();
-  const t = tenants.find(x => x.id === id);
-  if (!t) return;
-  
-  document.getElementById('modalBody').innerHTML = `
-    <div class="p-6">
-      <h3 class="text-xl font-bold text-gray-900 mb-6">Edit Tenant</h3>
-      <div class="space-y-4">
-        <input type="hidden" id="editTenantId" value="${t.id}">
-        <div>
-          <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Full Name</label>
-          <input type="text" id="editTenantName" value="${t.name}" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none text-sm">
-        </div>
-        <div>
-          <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Phone Number</label>
-          <input type="text" id="editTenantPhone" value="${t.phone||''}" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none text-sm">
-        </div>
-        <button onclick="updateTenantFlow()" class="w-full py-4 bg-teal-600 text-white font-bold rounded-2xl">Save Changes</button>
-      </div>
-    </div>`;
-  document.getElementById('roomModal').classList.add('active');
-};
-
-window.updateTenantFlow = async function() {
-  const id = document.getElementById('editTenantId').value;
-  const name = document.getElementById('editTenantName').value.trim();
-  const phone = document.getElementById('editTenantPhone').value.trim();
-  
-  if (!name) { alert('Name is required'); return; }
-  
-  const btn = event.target; 
-  btn.disabled = true; btn.innerHTML = 'Saving...';
-  
-  try {
-    const { error } = await window._supabase.from('tenants').update({ name, phone }).eq('id', id);
-    if (error) throw error;
-    
-    window.clearCache('tenants');
-    showToast('Tenant updated');
-    closeModal();
-    renderTenants();
-  } catch (err) {
-    alert('Failed to update tenant: ' + err.message);
-    btn.disabled = false; btn.innerHTML = 'Save Changes';
-  }
-};
-
-window.openNewTenantModal = async function() {
+// ---- Vacant Rooms List ----
+async function renderVacantRooms() {
   const rooms = await loadRooms();
-  const vacant = rooms.filter(r => (r.status||'vacant').toLowerCase() === 'vacant');
-  document.getElementById('modalBody').innerHTML = `
-    <div class="p-6">
-      <h3 class="text-xl font-bold text-gray-900 mb-6">Register New Tenant</h3>
-      <div class="space-y-4">
-        <input type="text" id="tenantName" placeholder="Full Name" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none text-sm">
-        <select id="tenantUnit" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none text-sm">
-          ${vacant.length ? '<option value="">Select Room...</option>'+vacant.map(r=>`<option value="${r.roomNumber}">${r.roomNumber}</option>`).join('') : '<option value="">No Vacant Rooms</option>'}
-        </select>
-        ${!vacant.length ? '<p class="text-xs text-amber-600 font-bold">⚠️ Mark a room as Vacant first in the Rooms tab.</p>' : ''}
-        <input type="text" id="tenantPhone" placeholder="Phone Number" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none text-sm">
-        <input type="date" id="leaseStart" value="${new Date().toISOString().split('T')[0]}" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none text-sm">
-        <button onclick="registerTenantFlow()" class="w-full py-4 bg-teal-600 text-white font-bold rounded-2xl">Complete Registration</button>
+  const vacant = (rooms || []).filter(r => (r.status || '').toLowerCase() === 'vacant');
+  const list = document.getElementById('vacantList');
+  const noVacant = document.getElementById('noVacant');
+
+  if (!list) return;
+
+  if (vacant.length === 0) {
+    list.innerHTML = '';
+    if (noVacant) noVacant.classList.remove('hidden');
+    return;
+  }
+  if (noVacant) noVacant.classList.add('hidden');
+
+  list.innerHTML = vacant.map((room, i) => `
+    <div class="bg-white rounded-2xl shadow-sm p-4 border border-gray-100 flex gap-4 items-center cursor-pointer hover:shadow-md transition fade-in" style="animation-delay:${i*0.08}s" onclick="showVacantDetail('${room.roomNumber}')">
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center justify-between">
+          <h4 class="font-bold text-gray-900">${formatRoomTitle(room.roomNumber)}</h4>
+          <span class="badge badge-vacant text-[10px]">Vacant</span>
+        </div>
+        <p class="text-xs text-gray-500">Residential Unit</p>
+        <p class="text-sm font-bold text-teal-700">${formatRent(room.rent)}<span class="text-xs font-normal text-gray-400">/mo</span></p>
       </div>
-    </div>`;
-  document.getElementById('roomModal').classList.add('active');
-};
+    </div>
+  `).join('');
+}
 
-window.registerTenantFlow = async function() {
-  const name = document.getElementById('tenantName')?.value.trim();
-  const roomNumber = document.getElementById('tenantUnit')?.value;
-  const phone = document.getElementById('tenantPhone')?.value.trim();
-  const leaseStart = document.getElementById('leaseStart')?.value;
-  if (!name || !roomNumber) { alert('Name and room are required'); return; }
-  const btn = event.target; btn.disabled = true; btn.innerHTML = 'Registering...';
-  try {
-    const { error: tErr } = await window._supabase.from('tenants').insert([{ name, room_number: roomNumber, phone, lease_start: leaseStart }]);
-    if (tErr) throw tErr;
-    const { error: rErr } = await window._supabase.from('rooms').update({ status: 'occupied' }).eq('room_number', roomNumber);
-    if (rErr) throw rErr;
-    window.clearCache('tenants'); window.clearCache('rooms');
-    showToast('🎉 Tenant registered!'); closeModal(); renderTenants(); renderStats(); renderRooms();
-  } catch(err) {
-    alert('Registration failed: ' + err.message);
-    btn.disabled = false; btn.innerHTML = 'Complete Registration';
-  }
-};
+async function showVacantDetail(roomNumber) {
+  document.getElementById('searchInput').value = roomNumber;
+  document.getElementById('passwordInput').focus();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
 
-// PAYMENTS
-window.renderPaymentStats = async function() {
-  const stats = await getPaymentStats();
-  const s = document.getElementById('paymentStats');
-  if (!s) return;
-  s.innerHTML = [
-    ['Collected', 'KES ' + (stats.totalCollected||0).toLocaleString()],
-    ['Paid', stats.paidTenants],
-    ['Unpaid', stats.unpaidTenants],
-    ['Late', stats.latePayments],
-    ['Pending', stats.pendingVerifications]
-  ].map(([l,v]) => `<div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 text-center">
-    <p class="text-xs font-bold text-gray-400 uppercase mb-1">${l}</p>
-    <p class="text-xl font-black text-gray-900">${v}</p></div>`).join('');
-};
-
-window.renderPayments = async function() {
-  const [tenants, payments, rooms] = await Promise.all([
-    loadTenants(),
-    loadPayments(),
-    loadRooms()
-  ]);
-  const tbody = document.getElementById('paymentTableBody');
-  if (!tbody) return;
-  
-  if (!tenants.length) { 
-    tbody.innerHTML = '<tr><td colspan="5" class="py-12 text-center text-gray-400 italic">No tenants registered yet.</td></tr>'; 
-    return; 
-  }
-
-  tbody.innerHTML = tenants.map(t => {
-    // Find the tenant's payment record (most recent one or matching their room)
-    const payment = payments.find(p => p.unitNumber === t.room_number) || {};
-    const room = rooms.find(r => r.roomNumber === t.room_number) || {};
-    
-    // Status can be from payment record, otherwise default to pending
-    const status = payment.status || 'pending';
-    const amount = payment.amount || room.rent || 0;
-    const ref = payment.transactionCode || 'Manual';
-
-    // Badge styling based on status (paid, late, pending)
-    let badgeClass = 'bg-amber-100 text-amber-600';
-    let displayStatus = status;
-    if (status === 'paid' || status === 'verified') { badgeClass = 'bg-green-100 text-green-600'; displayStatus = 'Paid'; }
-    if (status === 'late' || status === 'rejected') { badgeClass = 'bg-red-100 text-red-600'; displayStatus = 'Late'; }
-    if (status === 'pending') { displayStatus = 'Pending'; }
-
-    return `
-    <tr class="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-      <td class="py-4 pl-2"><p class="font-bold text-sm text-gray-900">${t.name}</p><p class="text-xs text-gray-400">Unit ${t.room_number}</p></td>
-      <td class="py-4 font-bold text-sm">KES ${amount.toLocaleString()}</td>
-      <td class="py-4 text-sm text-gray-500">${ref}</td>
-      <td class="py-4"><span class="text-[10px] font-black px-2 py-1 rounded-full uppercase ${badgeClass}">${displayStatus}</span></td>
-      <td class="py-4 pr-2 text-right space-x-1">
-        ${payment.receiptImage ? `<button onclick="viewReceipt('${payment.receiptImage}')" class="text-xs font-bold text-teal-600 mr-2">Receipt</button>` : ''}
-        <button onclick="setTenantRentStatus('${t.name}', '${t.room_number}', ${amount}, 'verified')" class="text-[10px] font-bold text-green-600 px-2 py-1 bg-green-50 rounded uppercase hover:bg-green-100">Paid</button>
-        <button onclick="setTenantRentStatus('${t.name}', '${t.room_number}', ${amount}, 'rejected')" class="text-[10px] font-bold text-red-500 px-2 py-1 bg-red-50 rounded uppercase hover:bg-red-100">Late</button>
-        <button onclick="setTenantRentStatus('${t.name}', '${t.room_number}', ${amount}, 'pending')" class="text-[10px] font-bold text-amber-500 px-2 py-1 bg-amber-50 rounded uppercase hover:bg-amber-100">Pending</button>
-      </td>
-    </tr>`;
-  }).join('');
-};
-
-window.setTenantRentStatus = async function(tenantName, roomNumber, amount, status) {
-  try {
-    // Check if a payment record already exists for this tenant/room
-    const payments = await loadPayments();
-    const existingPayment = payments.find(p => p.unitNumber === roomNumber);
-
-    if (existingPayment) {
-      // Update existing
-      const { error } = await window._supabase.from('payments').update({ status }).eq('id', existingPayment.id);
-      if (error) throw error;
-    } else {
-      // Create new
-      const month = new Date().toLocaleString('en-US', { month: 'short', year: 'numeric' });
-      const { error } = await window._supabase.from('payments').insert([{
-        tenant_name: tenantName,
-        room_number: roomNumber,
-        amount: amount,
-        status: status,
-        month: month,
-        transaction_code: 'Manual'
-      }]);
-      if (error) throw error;
-    }
-    window.clearCache('payments');
-    showToast('Status updated to ' + status);
-    renderPaymentStats();
-    renderPayments();
-  } catch (err) {
-    alert('Failed to update status: ' + err.message);
-  }
-};
-
-window.downloadRentRecords = async function() {
-  try {
-    const tenants = await loadTenants();
-    const payments = await loadPayments();
-    const rooms = await loadRooms();
-    
-    const exportData = tenants.map(t => {
-      const payment = payments.find(p => p.unitNumber === t.room_number) || {};
-      const room = rooms.find(r => r.roomNumber === t.room_number) || {};
-      
-      const amount = payment.amount || room.rent || 0;
-      let status = payment.status || 'pending';
-      if (status === 'verified') status = 'paid';
-      if (status === 'rejected') status = 'late';
-      
-      const ref = payment.transactionCode || 'Manual';
-      const date = payment.date ? new Date(payment.date).toLocaleDateString() : new Date().toLocaleDateString();
-      const phone = t.phone || 'N/A';
-      
-      return {
-        "Tenant Name": t.name || 'Unknown',
-        "Unit Number": String(t.room_number || ''),
-        "Phone": String(phone),
-        "Rent Amount": Number(amount),
-        "Status": String(status).toUpperCase(),
-        "Reference": String(ref),
-        "Date": String(date)
-      };
-    });
-    
-    const ws = XLSX.utils.json_to_sheet(exportData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Rent Records");
-    
-    const month = new Date().toLocaleString('en-US', { month: 'short', year: 'numeric' }).replace(' ', '_');
-    XLSX.writeFile(wb, `rent_records_${month}.xlsx`);
-    
-    showToast('Records downloaded');
-  } catch (err) {
-    alert('Failed to download records: ' + err.message);
-  }
-};
-
-window.filterPayments = function() { renderPayments(); };
-
-window.handlePaymentAction = async function(id, status) {
-  const res = await updatePaymentStatus(id, status);
-  if (res) { showToast('Payment ' + status); renderPaymentStats(); renderPayments(); }
-};
-
-window.viewReceipt = function(url) {
-  document.getElementById('receiptPreview').src = url;
-  document.getElementById('receiptModal').classList.add('active');
-};
-
-window.downloadReport = function() {
-  loadPayments().then(payments => {
-    const exportData = payments.map(p => ({
-      "Tenant": p.tenantName || 'Unknown',
-      "Unit": String(p.unitNumber || ''),
-      "Amount": Number(p.amount) || 0,
-      "Code": String(p.transactionCode || ''),
-      "Status": String(p.status || '').toUpperCase(),
-      "Month": String(p.month || '')
-    }));
-
-    const ws = XLSX.utils.json_to_sheet(exportData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Payments Report");
-    XLSX.writeFile(wb, "payments-report.xlsx");
-    
-    showToast('Report downloaded');
-  });
-};
+// ---- Cross-tab sync (Disabled for Supabase, but keeping structure if needed) ----
+// window.addEventListener('storage', ...)
