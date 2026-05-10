@@ -74,7 +74,8 @@ window.handleLogout = async function() {
 };
 
 window.initializeApp = async function() {
-  await renderStats(); await renderRooms(); setTimeout(generateQR, 300);
+  await Promise.all([renderStats(), renderRooms()]);
+  setTimeout(generateQR, 300);
 };
 
 window.switchView = function(view) {
@@ -181,7 +182,10 @@ window.createNewRoom = async function() {
   const pw = document.getElementById('newRoomPassword').value.trim();
   if (!rn || !rent) { alert('Room number and rent required'); return; }
   const { error } = await window._supabase.from('rooms').insert([{ room_number: rn, monthly_rent: rent, status: 'vacant', room_password: pw||null }]);
-  if (!error) { showToast('Room created'); closeModal(); renderStats(); renderRooms(); }
+  if (!error) { 
+    window.clearCache('rooms');
+    showToast('Room created'); closeModal(); renderStats(); renderRooms(); 
+  }
   else alert('Failed: ' + error.message);
 };
 
@@ -237,6 +241,7 @@ window.deleteNotice = async function(id) {
   try {
     const { error } = await window._supabase.from('notices').delete().eq('id', id);
     if (error) throw error;
+    window.clearCache('notices');
     showToast('Notice deleted');
     renderNotices();
   } catch (err) {
@@ -319,7 +324,10 @@ window.openMaintenanceDetails = async function(id) {
 
 window.updateFixStatus = async function(id, status) {
   const { error } = await window._supabase.from('maintenance_requests').update({ status }).eq('id', id);
-  if (!error) { showToast('Status updated'); closeModal(); renderMaintenance(); }
+  if (!error) { 
+    window.clearCache('maintenance');
+    showToast('Status updated'); closeModal(); renderMaintenance(); 
+  }
 };
 
 window.deleteMaintenanceRequest = async function(id) {
@@ -327,6 +335,7 @@ window.deleteMaintenanceRequest = async function(id) {
   try {
     const { error } = await window._supabase.from('maintenance_requests').delete().eq('id', id);
     if (error) throw error;
+    window.clearCache('maintenance');
     showToast('Record deleted');
     renderMaintenance();
   } catch (err) {
@@ -370,6 +379,8 @@ window.deleteTenant = async function(id, roomNumber) {
     // Mark room as vacant
     await window._supabase.from('rooms').update({ status: 'vacant' }).eq('room_number', roomNumber);
     
+    window.clearCache('tenants');
+    window.clearCache('rooms');
     showToast('Tenant removed');
     renderTenants();
     renderRooms();
@@ -417,6 +428,7 @@ window.updateTenantFlow = async function() {
     const { error } = await window._supabase.from('tenants').update({ name, phone }).eq('id', id);
     if (error) throw error;
     
+    window.clearCache('tenants');
     showToast('Tenant updated');
     closeModal();
     renderTenants();
@@ -458,6 +470,7 @@ window.registerTenantFlow = async function() {
     if (tErr) throw tErr;
     const { error: rErr } = await window._supabase.from('rooms').update({ status: 'occupied' }).eq('room_number', roomNumber);
     if (rErr) throw rErr;
+    window.clearCache('tenants'); window.clearCache('rooms');
     showToast('🎉 Tenant registered!'); closeModal(); renderTenants(); renderStats(); renderRooms();
   } catch(err) {
     alert('Registration failed: ' + err.message);
@@ -482,9 +495,11 @@ window.renderPaymentStats = async function() {
 };
 
 window.renderPayments = async function() {
-  const tenants = await loadTenants();
-  const payments = await loadPayments();
-  const rooms = await loadRooms();
+  const [tenants, payments, rooms] = await Promise.all([
+    loadTenants(),
+    loadPayments(),
+    loadRooms()
+  ]);
   const tbody = document.getElementById('paymentTableBody');
   if (!tbody) return;
   
@@ -549,6 +564,7 @@ window.setTenantRentStatus = async function(tenantName, roomNumber, amount, stat
       }]);
       if (error) throw error;
     }
+    window.clearCache('payments');
     showToast('Status updated to ' + status);
     renderPaymentStats();
     renderPayments();
@@ -563,24 +579,7 @@ window.downloadRentRecords = async function() {
     const payments = await loadPayments();
     const rooms = await loadRooms();
     
-    let html = `<html xmlns:x="urn:schemas-microsoft-com:office:excel">
-      <head><meta charset="utf-8"></head>
-      <body>
-        <table border="1">
-          <thead>
-            <tr>
-              <th style="background-color: #0d9488; color: white;">Tenant Name</th>
-              <th style="background-color: #0d9488; color: white;">Unit Number</th>
-              <th style="background-color: #0d9488; color: white;">Phone</th>
-              <th style="background-color: #0d9488; color: white;">Rent Amount</th>
-              <th style="background-color: #0d9488; color: white;">Status</th>
-              <th style="background-color: #0d9488; color: white;">Reference</th>
-              <th style="background-color: #0d9488; color: white;">Date</th>
-            </tr>
-          </thead>
-          <tbody>`;
-    
-    tenants.forEach(t => {
+    const exportData = tenants.map(t => {
       const payment = payments.find(p => p.unitNumber === t.room_number) || {};
       const room = rooms.find(r => r.roomNumber === t.room_number) || {};
       
@@ -593,27 +592,23 @@ window.downloadRentRecords = async function() {
       const date = payment.date ? new Date(payment.date).toLocaleDateString() : new Date().toLocaleDateString();
       const phone = t.phone || 'N/A';
       
-      html += `<tr>
-        <td>${t.name || 'Unknown'}</td>
-        <td>${t.room_number || ''}</td>
-        <td>${phone}</td>
-        <td>${amount}</td>
-        <td>${String(status).toUpperCase()}</td>
-        <td>${ref}</td>
-        <td>${date}</td>
-      </tr>`;
+      return {
+        "Tenant Name": t.name || 'Unknown',
+        "Unit Number": String(t.room_number || ''),
+        "Phone": String(phone),
+        "Rent Amount": Number(amount),
+        "Status": String(status).toUpperCase(),
+        "Reference": String(ref),
+        "Date": String(date)
+      };
     });
     
-    html += `</tbody></table></body></html>`;
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Rent Records");
     
-    const blob = new Blob([html], { type: 'application/vnd.ms-excel' });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
     const month = new Date().toLocaleString('en-US', { month: 'short', year: 'numeric' }).replace(' ', '_');
-    link.download = `rent_records_${month}.xls`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    XLSX.writeFile(wb, `rent_records_${month}.xlsx`);
     
     showToast('Records downloaded');
   } catch (err) {
@@ -635,42 +630,19 @@ window.viewReceipt = function(url) {
 
 window.downloadReport = function() {
   loadPayments().then(payments => {
-    let html = `<html xmlns:x="urn:schemas-microsoft-com:office:excel">
-      <head><meta charset="utf-8"></head>
-      <body>
-        <table border="1">
-          <thead>
-            <tr>
-              <th style="background-color: #0d9488; color: white;">Tenant</th>
-              <th style="background-color: #0d9488; color: white;">Unit</th>
-              <th style="background-color: #0d9488; color: white;">Amount</th>
-              <th style="background-color: #0d9488; color: white;">Code</th>
-              <th style="background-color: #0d9488; color: white;">Status</th>
-              <th style="background-color: #0d9488; color: white;">Month</th>
-            </tr>
-          </thead>
-          <tbody>`;
-    
-    payments.forEach(p => {
-      html += `<tr>
-        <td>${p.tenantName || 'Unknown'}</td>
-        <td>${p.unitNumber || ''}</td>
-        <td>${p.amount || 0}</td>
-        <td>${p.transactionCode || ''}</td>
-        <td>${String(p.status || '').toUpperCase()}</td>
-        <td>${p.month || ''}</td>
-      </tr>`;
-    });
+    const exportData = payments.map(p => ({
+      "Tenant": p.tenantName || 'Unknown',
+      "Unit": String(p.unitNumber || ''),
+      "Amount": Number(p.amount) || 0,
+      "Code": String(p.transactionCode || ''),
+      "Status": String(p.status || '').toUpperCase(),
+      "Month": String(p.month || '')
+    }));
 
-    html += `</tbody></table></body></html>`;
-
-    const blob = new Blob([html], { type: 'application/vnd.ms-excel' });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = "payments-report.xls";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Payments Report");
+    XLSX.writeFile(wb, "payments-report.xlsx");
     
     showToast('Report downloaded');
   });
