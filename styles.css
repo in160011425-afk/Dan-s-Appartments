@@ -97,6 +97,16 @@ body {
   background: var(--yellow);
 }
 
+.badge-unpaid {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
+
+.badge-unpaid::before {
+  background: #94a3b8;
+}
+
 .room-card {
   background: var(--bg-card);
   border-radius: var(--radius);
@@ -511,6 +521,35 @@ th {
 @keyframes slideIn {
   from { opacity: 0; transform: translateX(-10px); }
   to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-10px); }
+}
+
+/* Custom Scrollbar Hide for mobile tables */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Right inner shadow hint for scrollable containers */
+.shadow-inner-right {
+  position: relative;
+}
+.shadow-inner-right::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 20px;
+  background: linear-gradient(to left, rgba(0,0,0,0.03), transparent);
+  pointer-events: none;
 }
 
 .slide-in {
