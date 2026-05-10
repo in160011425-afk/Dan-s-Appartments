@@ -345,29 +345,52 @@ window.deleteMaintenanceRequest = async function (id) {
 };
 
 // TENANTS
-window.renderTenants = async function () {
+window.renderTenants = async function() {
   const list = document.getElementById('tenantsList');
   if (!list) return;
   list.innerHTML = '<div class="col-span-full py-12 flex justify-center"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div></div>';
-  const tenants = await loadTenants();
-  if (!tenants.length) { list.innerHTML = '<div class="col-span-full text-center py-12 text-gray-400 italic">No tenants registered yet.</div>'; return; }
-  list.innerHTML = tenants.map(t => `
+  const [tenants, rooms] = await Promise.all([loadTenants(), loadRooms()]);
+  if (!rooms.length) { list.innerHTML = '<div class="col-span-full text-center py-12 text-gray-400 italic">No rooms available.</div>'; return; }
+  
+  list.innerHTML = rooms.map(room => {
+    const t = tenants.find(x => x.room_number === room.roomNumber);
+    if (t) {
+      return `
     <div class="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 fade-in">
       <div class="flex items-center gap-4 mb-4">
         <div class="w-12 h-12 rounded-full bg-teal-50 flex items-center justify-center text-teal-600 font-bold text-lg">
-          ${t.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}</div>
+          ${t.name.split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2)}</div>
         <div><h4 class="font-bold text-gray-900">${t.name}</h4>
-          <p class="text-xs text-gray-400 font-bold uppercase">Unit ${t.room_number}</p></div>
+          <p class="text-xs text-gray-400 font-bold uppercase">${formatRoomTitle(room.roomNumber)}</p></div>
       </div>
       <div class="space-y-2 text-sm mb-4">
-        <div class="flex justify-between"><span class="text-gray-400">Phone</span><span class="font-medium">${t.phone || 'N/A'}</span></div>
+        <div class="flex justify-between"><span class="text-gray-400">Phone</span><span class="font-medium">${t.phone||'N/A'}</span></div>
         <div class="flex justify-between"><span class="text-gray-400">Since</span><span class="font-medium">${t.lease_start ? new Date(t.lease_start).toLocaleDateString() : 'N/A'}</span></div>
       </div>
       <div class="flex justify-end gap-2 border-t border-gray-50 pt-3">
-        <button onclick="openEditTenantModal('${t.id}')" class="text-[10px] font-bold text-gray-400 hover:text-gray-600 uppercase">Edit</button>
-        <button onclick="deleteTenant('${t.id}', '${t.room_number}')" class="text-[10px] font-bold text-red-400 hover:text-red-600 uppercase">Delete</button>
+        <button onclick="openEditTenantModal('${t.id}')" class="min-h-[44px] min-w-[44px] px-3 font-bold text-gray-400 hover:text-gray-600 uppercase text-xs">Edit</button>
+        <button onclick="deleteTenant('${t.id}', '${t.room_number}')" class="min-h-[44px] min-w-[44px] px-3 font-bold text-red-400 hover:text-red-600 uppercase text-xs">Delete</button>
       </div>
-    </div>`).join('');
+    </div>`;
+    } else {
+      return `
+    <div class="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 fade-in opacity-70 hover:opacity-100 transition-opacity">
+      <div class="flex items-center gap-4 mb-4">
+        <div class="w-12 h-12 rounded-full bg-gray-50 flex items-center justify-center text-gray-300 font-bold text-lg">
+          ?</div>
+        <div><h4 class="font-bold text-gray-400">No Tenant</h4>
+          <p class="text-xs text-gray-400 font-bold uppercase">${formatRoomTitle(room.roomNumber)}</p></div>
+      </div>
+      <div class="space-y-2 text-sm mb-4">
+        <div class="flex justify-between"><span class="text-gray-400">Phone</span><span class="font-medium text-gray-400">—</span></div>
+        <div class="flex justify-between"><span class="text-gray-400">Since</span><span class="font-medium text-gray-400">—</span></div>
+      </div>
+      <div class="flex justify-end gap-2 border-t border-gray-50 pt-3">
+        <button onclick="openNewTenantModal('${room.roomNumber}')" class="min-h-[44px] px-4 font-bold text-teal-600 bg-teal-50 rounded-xl hover:bg-teal-100 uppercase text-xs w-full">Add Tenant</button>
+      </div>
+    </div>`;
+    }
+  }).join('');
 };
 
 window.deleteTenant = async function (id, roomNumber) {
@@ -438,16 +461,16 @@ window.updateTenantFlow = async function () {
   }
 };
 
-window.openNewTenantModal = async function () {
+window.openNewTenantModal = async function(preselectRoom = '') {
   const rooms = await loadRooms();
-  const vacant = rooms.filter(r => (r.status || 'vacant').toLowerCase() === 'vacant');
+  const vacant = rooms.filter(r => (r.status||'vacant').toLowerCase() === 'vacant');
   document.getElementById('modalBody').innerHTML = `
     <div class="p-6">
       <h3 class="text-xl font-bold text-gray-900 mb-6">Register New Tenant</h3>
       <div class="space-y-4">
         <input type="text" id="tenantName" placeholder="Full Name" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none text-sm">
         <select id="tenantUnit" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none text-sm">
-          ${vacant.length ? '<option value="">Select Room...</option>' + vacant.map(r => `<option value="${r.roomNumber}">${r.roomNumber}</option>`).join('') : '<option value="">No Vacant Rooms</option>'}
+          ${vacant.length ? '<option value="">Select Room...</option>'+vacant.map(r=>`<option value="${r.roomNumber}" ${r.roomNumber===preselectRoom?'selected':''}>${formatRoomTitle(r.roomNumber)}</option>`).join('') : '<option value="">No Vacant Rooms</option>'}
         </select>
         ${!vacant.length ? '<p class="text-xs text-amber-600 font-bold">⚠️ Mark a room as Vacant first in the Rooms tab.</p>' : ''}
         <input type="text" id="tenantPhone" placeholder="Phone Number" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none text-sm">
@@ -494,7 +517,7 @@ window.renderPaymentStats = async function () {
     <p class="text-xl font-black text-gray-900">${v}</p></div>`).join('');
 };
 
-window.renderPayments = async function () {
+window.renderPayments = async function() {
   const [tenants, payments, rooms] = await Promise.all([
     loadTenants(),
     loadPayments(),
@@ -502,43 +525,84 @@ window.renderPayments = async function () {
   ]);
   const tbody = document.getElementById('paymentTableBody');
   if (!tbody) return;
-
-  if (!tenants.length) {
-    tbody.innerHTML = '<tr><td colspan="5" class="py-12 text-center text-gray-400 italic">No tenants registered yet.</td></tr>';
-    return;
+  
+  if (!rooms.length) { 
+    tbody.innerHTML = '<tr><td colspan="6" class="py-12 text-center text-gray-400 italic">No rooms available.</td></tr>'; 
+    return; 
   }
 
-  tbody.innerHTML = tenants.map(t => {
-    // Find the tenant's payment record (most recent one or matching their room)
-    const payment = payments.find(p => p.unitNumber === t.room_number) || {};
-    const room = rooms.find(r => r.roomNumber === t.room_number) || {};
+  tbody.innerHTML = rooms.map(room => {
+    const t = tenants.find(x => x.room_number === room.roomNumber);
+    const payment = payments.find(p => p.unitNumber === room.roomNumber) || {};
+    
+    const amount = payment.amount || 0;
+    const status = payment.id ? (payment.status || 'pending') : 'unpaid';
+    const ref = payment.transactionCode || (t ? 'Manual' : '—');
 
-    // Status can be from payment record, otherwise default to pending
-    const status = payment.status || 'pending';
-    const amount = payment.amount || room.rent || 0;
-    const ref = payment.transactionCode || 'Manual';
-
-    // Badge styling based on status (paid, late, pending)
-    let badgeClass = 'bg-amber-100 text-amber-600';
-    let displayStatus = status;
+    // Badge styling based on status (paid, late, pending, unpaid)
+    let badgeClass = 'badge-unpaid';
+    let displayStatus = 'Unpaid';
     if (status === 'paid' || status === 'verified') { badgeClass = 'bg-green-100 text-green-600'; displayStatus = 'Paid'; }
     if (status === 'late' || status === 'rejected') { badgeClass = 'bg-red-100 text-red-600'; displayStatus = 'Late'; }
-    if (status === 'pending') { displayStatus = 'Pending'; }
+    if (status === 'pending') { badgeClass = 'bg-amber-100 text-amber-600'; displayStatus = 'Pending'; }
 
-    return `
-    <tr class="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-      <td class="py-4 pl-2"><p class="font-bold text-sm text-gray-900">${t.name}</p><p class="text-xs text-gray-400">Unit ${t.room_number}</p></td>
-      <td class="py-4 font-bold text-sm">KES ${amount.toLocaleString()}</td>
-      <td class="py-4 text-sm text-gray-500">${ref}</td>
-      <td class="py-4"><span class="text-[10px] font-black px-2 py-1 rounded-full uppercase ${badgeClass}">${displayStatus}</span></td>
-      <td class="py-4 pr-2 text-right space-x-1">
-        ${payment.receiptImage ? `<button onclick="viewReceipt('${payment.receiptImage}')" class="text-xs font-bold text-teal-600 mr-2">Receipt</button>` : ''}
-        <button onclick="setTenantRentStatus('${t.name}', '${t.room_number}', ${amount}, 'verified')" class="text-[10px] font-bold text-green-600 px-2 py-1 bg-green-50 rounded uppercase hover:bg-green-100">Paid</button>
-        <button onclick="setTenantRentStatus('${t.name}', '${t.room_number}', ${amount}, 'rejected')" class="text-[10px] font-bold text-red-500 px-2 py-1 bg-red-50 rounded uppercase hover:bg-red-100">Late</button>
-        <button onclick="setTenantRentStatus('${t.name}', '${t.room_number}', ${amount}, 'pending')" class="text-[10px] font-bold text-amber-500 px-2 py-1 bg-amber-50 rounded uppercase hover:bg-amber-100">Pending</button>
-      </td>
-    </tr>`;
+    if (t) {
+      return `
+      <tr class="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+        <td class="py-4 pl-4 whitespace-nowrap"><p class="font-bold text-sm text-gray-900">${formatRoomTitle(room.roomNumber)}</p><p class="text-xs text-gray-400">${t.name}</p></td>
+        <td class="py-4 font-bold text-sm whitespace-nowrap">KES ${amount.toLocaleString()}</td>
+        <td class="py-4 text-sm text-gray-500 whitespace-nowrap">${ref}</td>
+        <td class="py-4 whitespace-nowrap"><span class="text-[10px] font-black px-2 py-1 rounded-full uppercase ${badgeClass}">${displayStatus}</span></td>
+        <td class="py-4 pr-4 text-right space-x-1 min-w-[300px] whitespace-nowrap">
+          ${payment.receiptImage ? `<button onclick="viewReceipt('${payment.receiptImage}')" class="min-h-[44px] px-2 text-xs font-bold text-teal-600 mr-1">Receipt</button>` : ''}
+          <button onclick="setTenantRentStatus('${t.name}', '${t.room_number}', ${amount}, 'verified')" class="min-h-[44px] min-w-[44px] text-[10px] font-bold text-green-600 px-3 py-2 bg-green-50 rounded uppercase hover:bg-green-100">Paid</button>
+          <button onclick="setTenantRentStatus('${t.name}', '${t.room_number}', ${amount}, 'rejected')" class="min-h-[44px] min-w-[44px] text-[10px] font-bold text-red-500 px-3 py-2 bg-red-50 rounded uppercase hover:bg-red-100">Late</button>
+          <button onclick="setTenantRentStatus('${t.name}', '${t.room_number}', ${amount}, 'pending')" class="min-h-[44px] min-w-[44px] text-[10px] font-bold text-amber-500 px-3 py-2 bg-amber-50 rounded uppercase hover:bg-amber-100">Pending</button>
+          <button onclick="openEditRentModal('${t.room_number}', ${amount})" class="min-h-[44px] min-w-[44px] text-[10px] font-bold text-gray-600 px-3 py-2 bg-gray-100 rounded uppercase hover:bg-gray-200 ml-1 shadow-sm border border-gray-200">Edit</button>
+        </td>
+      </tr>`;
+    } else {
+      return `
+      <tr class="border-b border-gray-50 hover:bg-gray-50 transition-colors opacity-60">
+        <td class="py-4 pl-4 whitespace-nowrap"><p class="font-bold text-sm text-gray-900">${formatRoomTitle(room.roomNumber)}</p><p class="text-xs text-gray-400">No Tenant</p></td>
+        <td class="py-4 font-bold text-sm whitespace-nowrap">KES 0</td>
+        <td class="py-4 text-sm text-gray-500 whitespace-nowrap">—</td>
+        <td class="py-4 whitespace-nowrap"><span class="text-[10px] font-black px-2 py-1 rounded-full uppercase badge-unpaid">Unpaid</span></td>
+        <td class="py-4 pr-4 text-right space-x-1 min-w-[300px] whitespace-nowrap">
+          <button onclick="openNewTenantModal('${room.roomNumber}')" class="min-h-[44px] px-6 py-2 font-bold text-teal-600 bg-teal-50 rounded-xl hover:bg-teal-100 uppercase text-xs w-full text-center">Add Tenant</button>
+        </td>
+      </tr>`;
+    }
   }).join('');
+};
+
+window.openEditRentModal = async function(roomNumber, currentAmount) {
+  document.getElementById('modalBody').innerHTML = `
+    <div class="p-6">
+      <h3 class="text-xl font-bold text-gray-900 mb-6">Edit Rent Amount</h3>
+      <div class="space-y-4">
+        <label class="block text-xs font-bold text-gray-400 uppercase mb-2">${formatRoomTitle(roomNumber)}</label>
+        <input type="number" id="editRentAmount" value="${currentAmount}" class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none text-sm">
+        <button onclick="saveEditRent('${roomNumber}')" class="w-full py-4 bg-teal-600 text-white font-bold rounded-2xl min-h-[44px]">Save Amount</button>
+      </div>
+    </div>`;
+  document.getElementById('roomModal').classList.add('active');
+};
+
+window.saveEditRent = async function(roomNumber) {
+  const amount = parseInt(document.getElementById('editRentAmount').value);
+  if (isNaN(amount)) { alert('Invalid amount'); return; }
+  
+  const tenants = await loadTenants();
+  const t = tenants.find(x => x.room_number === roomNumber);
+  if (!t) return;
+  
+  const btn = event.target;
+  btn.disabled = true;
+  btn.innerHTML = 'Saving...';
+  
+  await setTenantRentStatus(t.name, roomNumber, amount, 'pending');
+  closeModal();
 };
 
 window.setTenantRentStatus = async function (tenantName, roomNumber, amount, status) {
@@ -549,7 +613,7 @@ window.setTenantRentStatus = async function (tenantName, roomNumber, amount, sta
 
     if (existingPayment) {
       // Update existing
-      const { error } = await window._supabase.from('payments').update({ status }).eq('id', existingPayment.id);
+      const { error } = await window._supabase.from('payments').update({ status, amount }).eq('id', existingPayment.id);
       if (error) throw error;
     } else {
       // Create new
@@ -575,31 +639,30 @@ window.setTenantRentStatus = async function (tenantName, roomNumber, amount, sta
 
 window.downloadRentRecords = async function () {
   try {
-    const tenants = await loadTenants();
-    const payments = await loadPayments();
-    const rooms = await loadRooms();
+    const [tenants, payments, rooms] = await Promise.all([loadTenants(), loadPayments(), loadRooms()]);
 
-    const exportData = tenants.map(t => {
-      const payment = payments.find(p => p.unitNumber === t.room_number) || {};
-      const room = rooms.find(r => r.roomNumber === t.room_number) || {};
-
-      const amount = payment.amount || room.rent || 0;
-      let status = payment.status || 'pending';
+    const exportData = rooms.map(room => {
+      const t = tenants.find(x => x.room_number === room.roomNumber);
+      const payment = payments.find(p => p.unitNumber === room.roomNumber) || {};
+      
+      const amount = payment.amount || 0;
+      let status = payment.id ? (payment.status || 'pending') : 'unpaid';
+      if (!t) status = 'unpaid';
       if (status === 'verified') status = 'paid';
       if (status === 'rejected') status = 'late';
-
-      const ref = payment.transactionCode || 'Manual';
+      
+      const ref = payment.transactionCode || (t ? 'Manual' : '—');
       const date = payment.date ? new Date(payment.date).toLocaleDateString() : new Date().toLocaleDateString();
-      const phone = t.phone || 'N/A';
-
+      const phone = t ? (t.phone || 'N/A') : '—';
+      
       return {
-        "Tenant Name": t.name || 'Unknown',
-        "Unit Number": String(t.room_number || ''),
+        "Room": formatRoomTitle(room.roomNumber),
+        "Tenant Name": t ? t.name : 'No Tenant',
         "Phone": String(phone),
-        "Rent Amount": Number(amount),
+        "Rent Amount": t ? Number(amount) : 0,
         "Status": String(status).toUpperCase(),
         "Reference": String(ref),
-        "Date": String(date)
+        "Date": t ? String(date) : '—'
       };
     });
 
