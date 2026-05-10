@@ -563,8 +563,7 @@ window.downloadRentRecords = async function() {
     const payments = await loadPayments();
     const rooms = await loadRooms();
     
-    let csvContent = "data:text/csv;charset=utf-8,";
-    csvContent += "Tenant Name,Unit Number,Phone,Rent Amount,Status,Reference,Date\n";
+    const data = [["Tenant Name", "Unit Number", "Phone", "Rent Amount", "Status", "Reference", "Date"]];
     
     tenants.forEach(t => {
       const payment = payments.find(p => p.unitNumber === t.room_number) || {};
@@ -579,27 +578,23 @@ window.downloadRentRecords = async function() {
       const date = payment.date ? new Date(payment.date).toLocaleDateString() : new Date().toLocaleDateString();
       const phone = t.phone || 'N/A';
       
-      const row = [
-        `"${t.name}"`, 
-        `"${t.room_number}"`, 
-        `"${phone}"`,
+      data.push([
+        t.name, 
+        t.room_number, 
+        phone,
         amount, 
-        `"${status.toUpperCase()}"`, 
-        `"${ref}"`, 
-        `"${date}"`
-      ].join(",");
-      
-      csvContent += row + "\n";
+        status.toUpperCase(), 
+        ref, 
+        date
+      ]);
     });
     
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Rent Records");
+    
     const month = new Date().toLocaleString('en-US', { month: 'short', year: 'numeric' }).replace(' ', '_');
-    link.setAttribute("download", `rent_records_${month}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    XLSX.writeFile(wb, `rent_records_${month}.xlsx`);
     
     showToast('Records downloaded');
   } catch (err) {
@@ -621,13 +616,13 @@ window.viewReceipt = function(url) {
 
 window.downloadReport = function() {
   loadPayments().then(payments => {
-    const rows = [['Tenant','Unit','Amount','Code','Status','Month']].concat(
+    const data = [['Tenant','Unit','Amount','Code','Status','Month']].concat(
       payments.map(p => [p.tenantName, p.unitNumber, p.amount, p.transactionCode, p.status, p.month])
     );
-    const csv = rows.map(r => r.map(v => `"${v||''}"`).join(',')).join('\n');
-    const a = document.createElement('a');
-    a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
-    a.download = 'payments-report.csv'; a.click();
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Payments Report");
+    XLSX.writeFile(wb, "payments-report.xlsx");
     showToast('Report downloaded');
   });
 };
