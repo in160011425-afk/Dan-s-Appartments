@@ -51,6 +51,9 @@ self.addEventListener('fetch', event => {
       });
     }).catch(() => {
       // Offline fallback if needed, but the core shell should be cached
+      if (event.request.url.includes('tenant.html')) {
+        return caches.match('./tenant.html');
+      }
       if (event.request.url.includes('.html')) {
         return caches.match('./index.html');
       }
