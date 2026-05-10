@@ -563,12 +563,22 @@ window.downloadRentRecords = async function() {
     const payments = await loadPayments();
     const rooms = await loadRooms();
     
-    const data = [
-      ["Rent Payments Record"],
-      ["Generated: " + new Date().toLocaleDateString()],
-      [],
-      ["Tenant Name", "Unit Number", "Phone", "Rent Amount", "Status", "Reference", "Date"]
-    ];
+    let html = `<html xmlns:x="urn:schemas-microsoft-com:office:excel">
+      <head><meta charset="utf-8"></head>
+      <body>
+        <table border="1">
+          <thead>
+            <tr>
+              <th style="background-color: #0d9488; color: white;">Tenant Name</th>
+              <th style="background-color: #0d9488; color: white;">Unit Number</th>
+              <th style="background-color: #0d9488; color: white;">Phone</th>
+              <th style="background-color: #0d9488; color: white;">Rent Amount</th>
+              <th style="background-color: #0d9488; color: white;">Status</th>
+              <th style="background-color: #0d9488; color: white;">Reference</th>
+              <th style="background-color: #0d9488; color: white;">Date</th>
+            </tr>
+          </thead>
+          <tbody>`;
     
     tenants.forEach(t => {
       const payment = payments.find(p => p.unitNumber === t.room_number) || {};
@@ -583,23 +593,27 @@ window.downloadRentRecords = async function() {
       const date = payment.date ? new Date(payment.date).toLocaleDateString() : new Date().toLocaleDateString();
       const phone = t.phone || 'N/A';
       
-      data.push([
-        t.name || 'Unknown', 
-        String(t.room_number || ''), 
-        String(phone),
-        Number(amount), 
-        String(status).toUpperCase(), 
-        String(ref), 
-        String(date)
-      ]);
+      html += `<tr>
+        <td>${t.name || 'Unknown'}</td>
+        <td>${t.room_number || ''}</td>
+        <td>${phone}</td>
+        <td>${amount}</td>
+        <td>${String(status).toUpperCase()}</td>
+        <td>${ref}</td>
+        <td>${date}</td>
+      </tr>`;
     });
     
-    const ws = XLSX.utils.aoa_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Rent Records");
+    html += `</tbody></table></body></html>`;
     
+    const blob = new Blob([html], { type: 'application/vnd.ms-excel' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
     const month = new Date().toLocaleString('en-US', { month: 'short', year: 'numeric' }).replace(' ', '_');
-    XLSX.writeFile(wb, `rent_records_${month}.xlsx`);
+    link.download = `rent_records_${month}.xls`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
     
     showToast('Records downloaded');
   } catch (err) {
@@ -621,28 +635,43 @@ window.viewReceipt = function(url) {
 
 window.downloadReport = function() {
   loadPayments().then(payments => {
-    const data = [
-      ["Payments Report"],
-      ["Generated: " + new Date().toLocaleDateString()],
-      [],
-      ['Tenant','Unit','Amount','Code','Status','Month']
-    ];
+    let html = `<html xmlns:x="urn:schemas-microsoft-com:office:excel">
+      <head><meta charset="utf-8"></head>
+      <body>
+        <table border="1">
+          <thead>
+            <tr>
+              <th style="background-color: #0d9488; color: white;">Tenant</th>
+              <th style="background-color: #0d9488; color: white;">Unit</th>
+              <th style="background-color: #0d9488; color: white;">Amount</th>
+              <th style="background-color: #0d9488; color: white;">Code</th>
+              <th style="background-color: #0d9488; color: white;">Status</th>
+              <th style="background-color: #0d9488; color: white;">Month</th>
+            </tr>
+          </thead>
+          <tbody>`;
     
     payments.forEach(p => {
-      data.push([
-        p.tenantName || 'Unknown', 
-        String(p.unitNumber || ''), 
-        Number(p.amount) || 0, 
-        String(p.transactionCode || ''), 
-        String(p.status || '').toUpperCase(), 
-        String(p.month || '')
-      ]);
+      html += `<tr>
+        <td>${p.tenantName || 'Unknown'}</td>
+        <td>${p.unitNumber || ''}</td>
+        <td>${p.amount || 0}</td>
+        <td>${p.transactionCode || ''}</td>
+        <td>${String(p.status || '').toUpperCase()}</td>
+        <td>${p.month || ''}</td>
+      </tr>`;
     });
 
-    const ws = XLSX.utils.aoa_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Payments Report");
-    XLSX.writeFile(wb, "payments-report.xlsx");
+    html += `</tbody></table></body></html>`;
+
+    const blob = new Blob([html], { type: 'application/vnd.ms-excel' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "payments-report.xls";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
     showToast('Report downloaded');
   });
 };
