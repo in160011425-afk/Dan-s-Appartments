@@ -563,7 +563,12 @@ window.downloadRentRecords = async function() {
     const payments = await loadPayments();
     const rooms = await loadRooms();
     
-    const data = [["Tenant Name", "Unit Number", "Phone", "Rent Amount", "Status", "Reference", "Date"]];
+    const data = [
+      ["Rent Payments Record"],
+      ["Generated: " + new Date().toLocaleDateString()],
+      [],
+      ["Tenant Name", "Unit Number", "Phone", "Rent Amount", "Status", "Reference", "Date"]
+    ];
     
     tenants.forEach(t => {
       const payment = payments.find(p => p.unitNumber === t.room_number) || {};
@@ -579,13 +584,13 @@ window.downloadRentRecords = async function() {
       const phone = t.phone || 'N/A';
       
       data.push([
-        t.name, 
-        t.room_number, 
-        phone,
-        amount, 
-        status.toUpperCase(), 
-        ref, 
-        date
+        t.name || 'Unknown', 
+        String(t.room_number || ''), 
+        String(phone),
+        Number(amount), 
+        String(status).toUpperCase(), 
+        String(ref), 
+        String(date)
       ]);
     });
     
@@ -616,9 +621,24 @@ window.viewReceipt = function(url) {
 
 window.downloadReport = function() {
   loadPayments().then(payments => {
-    const data = [['Tenant','Unit','Amount','Code','Status','Month']].concat(
-      payments.map(p => [p.tenantName, p.unitNumber, p.amount, p.transactionCode, p.status, p.month])
-    );
+    const data = [
+      ["Payments Report"],
+      ["Generated: " + new Date().toLocaleDateString()],
+      [],
+      ['Tenant','Unit','Amount','Code','Status','Month']
+    ];
+    
+    payments.forEach(p => {
+      data.push([
+        p.tenantName || 'Unknown', 
+        String(p.unitNumber || ''), 
+        Number(p.amount) || 0, 
+        String(p.transactionCode || ''), 
+        String(p.status || '').toUpperCase(), 
+        String(p.month || '')
+      ]);
+    });
+
     const ws = XLSX.utils.aoa_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Payments Report");
