@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   db = window._supabase;
   if (!db) { console.error('Supabase not ready'); return; }
   await renderVacantRooms();
-  
+
   document.getElementById('searchInput').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') document.getElementById('passwordInput').focus();
   });
@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // ---- Search ----
-window.searchRoom = async function() {
+window.searchRoom = async function () {
   const roomNumber = document.getElementById('searchInput').value.trim();
   const roomPassword = document.getElementById('passwordInput').value.trim();
   const section = document.getElementById('resultSection');
@@ -72,7 +72,7 @@ window.searchRoom = async function() {
 }
 
 // ---- Tab System ----
-window.switchTenantTab = function(tab) {
+window.switchTenantTab = function (tab) {
   document.querySelectorAll('.tenant-tab-content').forEach(c => c.classList.add('hidden'));
   document.querySelectorAll('.tenant-tab-btn').forEach(b => {
     b.classList.remove('border-teal-600', 'text-teal-600');
@@ -81,7 +81,7 @@ window.switchTenantTab = function(tab) {
 
   const target = document.getElementById('tab-' + tab);
   const btn = document.getElementById('btn-tab-' + tab);
-  
+
   if (target) target.classList.remove('hidden');
   if (btn) {
     btn.classList.add('border-teal-600', 'text-teal-600');
@@ -91,10 +91,10 @@ window.switchTenantTab = function(tab) {
 
 // ---- Build Room Card ----
 function buildRoomCard(room, isSearch) {
-  const whatsappMsg = encodeURIComponent(`Hello, I'm interested in Room ${room.roomNumber} at Dan's Rentals. Is it still ${room.status}?`);
+  const whatsappMsg = encodeURIComponent(`Hello, I'm interested in Room ${room.roomNumber} at Apartment Management System. Is it still ${room.status}?`);
   const whatsappUrl = `https://wa.me/${LANDLORD_PHONE}?text=${whatsappMsg}`;
   const callUrl = `tel:+${LANDLORD_PHONE}`;
-  const viewingMsg = encodeURIComponent(`Hi, I would like to schedule a viewing for Room ${room.roomNumber} at Dan's Rentals. Please let me know available times.`);
+  const viewingMsg = encodeURIComponent(`Hi, I would like to schedule a viewing for Room ${room.roomNumber} at Apartment Management System. Please let me know available times.`);
   const viewingUrl = `https://wa.me/${LANDLORD_PHONE}?text=${viewingMsg}`;
 
   return `
@@ -176,7 +176,7 @@ function buildRoomCard(room, isSearch) {
     </div>`;
 }
 
-window.loadTenantNotices = async function() {
+window.loadTenantNotices = async function () {
   const list = document.getElementById('tenantNoticesList');
   if (!list) return;
 
@@ -203,7 +203,7 @@ window.loadTenantNotices = async function() {
   `).join('');
 };
 
-window.loadTenantFixHistory = async function(roomNumber) {
+window.loadTenantFixHistory = async function (roomNumber) {
   const historyCont = document.getElementById('tenantFixHistory');
   if (!historyCont) return;
 
@@ -229,18 +229,18 @@ window.loadTenantFixHistory = async function(roomNumber) {
   `).join('');
 };
 
-window.deleteTenantFix = async function(id, roomNumber) {
+window.deleteTenantFix = async function (id, roomNumber) {
   if (!confirm('Delete this request?')) return;
   const { error } = await getDB().from('maintenance_requests').delete().eq('id', id);
-  if (!error) { 
+  if (!error) {
     window.clearCache('maintenance');
-    alert('Record deleted'); 
-    loadTenantFixHistory(roomNumber); 
+    alert('Record deleted');
+    loadTenantFixHistory(roomNumber);
   }
   else alert('Failed: ' + error.message);
 };
 
-window.submitMaintenanceRequestFlow = async function(roomNumber) {
+window.submitMaintenanceRequestFlow = async function (roomNumber) {
   const issue = document.getElementById('maintIssue').value.trim();
   const description = document.getElementById('maintDesc').value.trim();
 
@@ -280,7 +280,7 @@ async function renderVacantRooms() {
   if (noVacant) noVacant.classList.add('hidden');
 
   list.innerHTML = vacant.map((room, i) => `
-    <div class="bg-white rounded-2xl shadow-sm p-4 border border-gray-100 flex gap-4 items-center cursor-pointer hover:shadow-md transition fade-in" style="animation-delay:${i*0.08}s" onclick="showVacantDetail('${room.roomNumber}')">
+    <div class="bg-white rounded-2xl shadow-sm p-4 border border-gray-100 flex gap-4 items-center cursor-pointer hover:shadow-md transition fade-in" style="animation-delay:${i * 0.08}s" onclick="showVacantDetail('${room.roomNumber}')">
       <div class="flex-1 min-w-0">
         <div class="flex items-center justify-between">
           <h4 class="font-bold text-gray-900">${formatRoomTitle(room.roomNumber)}</h4>
