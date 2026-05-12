@@ -3,8 +3,8 @@
 // =============================================
 
 // Initialize and share the client globally (if not already done in HTML)
-if (!window._supabase && window.supabase && window.SUPABASE_CONFIG) {
-  window._supabase = window.supabase.createClient(window.SUPABASE_CONFIG.URL, window.SUPABASE_CONFIG.KEY);
+if (!window._supabase && window.supabase && window.SUPABASE_URL) {
+  window._supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
 }
 
 const _supabase = window._supabase;
