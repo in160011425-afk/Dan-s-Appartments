@@ -60,8 +60,22 @@
           </svg>
           Check Status
         </button>
+        
+        <!-- Quick Link for Guests -->
+        <button onclick="scrollToVacancies()" class="w-full mt-4 text-[10px] font-black text-teal-600 uppercase tracking-widest flex items-center justify-center gap-2 opacity-60 hover:opacity-100 transition-all">
+          Browse Available Houses <span class="animate-bounce">↓</span>
+        </button>
       </div>
     </section>
+
+    <!-- Floating Discovery Badge (Only for Guests) -->
+    <div id="scrollPrompt" onclick="scrollToVacancies()" class="hidden fixed bottom-8 left-1/2 -translate-x-1/2 z-[50] cursor-pointer group">
+      <div class="bg-teal-600 text-white px-6 py-4 rounded-full shadow-2xl flex items-center gap-3 whitespace-nowrap border-2 border-white/20 hover:bg-teal-700 transition-all active:scale-95">
+        <span class="text-lg">🏠</span>
+        <span class="text-[11px] font-black uppercase tracking-widest">View Available Houses</span>
+        <span class="animate-bounce">↓</span>
+      </div>
+    </div>
 
     <!-- ===== RESULT ===== -->
     <section id="resultSection" class="mb-10">
