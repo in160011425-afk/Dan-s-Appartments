@@ -23,7 +23,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('passwordInput').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') searchRoom();
   });
+
+  // Show scroll prompt after 1.5 seconds
+  setTimeout(() => {
+    const prompt = document.getElementById('scrollPrompt');
+    if (prompt) {
+      prompt.classList.remove('hidden');
+      prompt.classList.add('flex');
+    }
+  }, 1500);
 });
+
+window.scrollToVacancies = function() {
+  const list = document.getElementById('vacantList');
+  if (list) {
+    list.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Hide prompt once scrolled
+    document.getElementById('scrollPrompt')?.classList.add('opacity-0');
+  }
+};
 
 // ---- Search ----
 window.searchRoom = async function () {
@@ -62,6 +80,9 @@ window.searchRoom = async function () {
     return;
   }
 
+  // Hide discovery badge once tenant logs in
+  document.getElementById('scrollPrompt')?.remove();
+  
   section.innerHTML = buildRoomCard(room, true);
   // Reset tabs to Info
   setTimeout(() => {
@@ -102,6 +123,7 @@ function buildRoomCard(room, isSearch) {
       <!-- Tabs Header -->
       <div class="flex border-b border-gray-50 px-6">
         <button onclick="switchTenantTab('info')" id="btn-tab-info" class="tenant-tab-btn flex-1 py-4 text-xs font-bold uppercase tracking-widest border-b-2 transition-all">Info</button>
+        <button onclick="switchTenantTab('payment')" id="btn-tab-payment" class="tenant-tab-btn flex-1 py-4 text-xs font-bold uppercase tracking-widest border-b-2 border-transparent text-gray-400 transition-all">Payment</button>
         <button onclick="switchTenantTab('notices')" id="btn-tab-notices" class="tenant-tab-btn flex-1 py-4 text-xs font-bold uppercase tracking-widest border-b-2 border-transparent text-gray-400 transition-all">Notices</button>
         <button onclick="switchTenantTab('fixes')" id="btn-tab-fixes" class="tenant-tab-btn flex-1 py-4 text-xs font-bold uppercase tracking-widest border-b-2 border-transparent text-gray-400 transition-all">Fixes</button>
       </div>
@@ -136,6 +158,58 @@ function buildRoomCard(room, isSearch) {
               </a>
             </div>
           </div>
+        </div>
+
+        <!-- PAYMENT TAB -->
+        <div id="tab-payment" class="tenant-tab-content hidden space-y-6">
+          <div class="text-center pt-2">
+            <div class="w-16 h-16 bg-[#af233b] rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-red-100">
+              <span class="text-white font-black text-2xl">M</span>
+            </div>
+            <h4 class="text-xl font-bold text-gray-900">M-Pesa Payment</h4>
+            <p class="text-sm text-gray-500">Securely pay rent via Send Money</p>
+          </div>
+
+          <div class="bg-gray-50 rounded-3xl p-6 border border-gray-100 space-y-5">
+            <div class="flex justify-between items-center">
+              <div>
+                <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Recipient Name</p>
+                <p class="font-bold text-gray-900">Sarara Maroa</p>
+              </div>
+              <div class="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm text-xl">👤</div>
+            </div>
+
+            <div class="pt-5 border-t border-gray-200/50 flex justify-between items-center">
+              <div>
+                <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">M-Pesa Number</p>
+                <p class="font-black text-xl text-gray-900 tracking-tight">0717056096</p>
+              </div>
+              <button onclick="copyToClipboard('0717056096')" class="px-5 py-2.5 bg-teal-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-teal-100 transition-all active:scale-95">Copy</button>
+            </div>
+          </div>
+
+          <div class="space-y-4">
+            <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Payment Steps</p>
+            <div class="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm space-y-4">
+              <div class="flex gap-4">
+                <span class="w-6 h-6 rounded-full bg-teal-50 text-teal-600 text-xs font-black flex items-center justify-center shrink-0">1</span>
+                <p class="text-sm text-gray-600">Open M-Pesa & select <b>Send Money</b></p>
+              </div>
+              <div class="flex gap-4">
+                <span class="w-6 h-6 rounded-full bg-teal-50 text-teal-600 text-xs font-black flex items-center justify-center shrink-0">2</span>
+                <p class="text-sm text-gray-600">Enter Number: <b>0717056096</b></p>
+              </div>
+              <div class="flex gap-4">
+                <span class="w-6 h-6 rounded-full bg-teal-50 text-teal-600 text-xs font-black flex items-center justify-center shrink-0">3</span>
+                <p class="text-sm text-gray-600">Enter Amount: <b>${formatRent(room.rent)}</b></p>
+              </div>
+            </div>
+          </div>
+
+          <a href="tel:0717056096" class="w-full py-4 bg-gray-900 text-white rounded-2xl font-bold flex items-center justify-center gap-2 shadow-xl shadow-gray-200 transition-all active:scale-95">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
+            Call to Confirm Payment
+          </a>
         </div>
 
         <!-- NOTICES TAB -->
@@ -298,6 +372,15 @@ async function showVacantDetail(roomNumber) {
   document.getElementById('passwordInput').focus();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+
+window.copyToClipboard = function(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    alert('Phone number copied! You can now paste it into M-Pesa.');
+  }).catch(err => {
+    console.error('Failed to copy: ', err);
+    alert('Copy failed. Please dial the number manually.');
+  });
+};
 
 // ---- Cross-tab sync (Disabled for Supabase, but keeping structure if needed) ----
 // window.addEventListener('storage', ...)
