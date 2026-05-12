@@ -352,16 +352,27 @@ body {
   animation: pulse-dot 2s ease-in-out infinite;
 }
 
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(16px)
-  }
+.animate-fade-in-up {
+  animation: fadeInUp 0.4s ease-out forwards;
+}
 
-  to {
-    opacity: 1;
-    transform: translateY(0)
-  }
+@keyframes fadeInUp {
+  0% { opacity: 0; transform: translateY(16px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInUpBadge {
+  0% { opacity: 0; transform: translate(-50%, 20px); }
+  100% { opacity: 1; transform: translate(-50%, 0); }
+}
+
+@keyframes float-badge {
+  0%, 100% { transform: translate(-50%, 0); }
+  50% { transform: translate(-50%, -10px); }
+}
+
+#scrollPrompt {
+  animation: fadeInUpBadge 1s cubic-bezier(0.16, 1, 0.3, 1) forwards, float-badge 3s ease-in-out infinite 1s;
 }
 
 .fade-in {
